@@ -76,7 +76,7 @@ type (
 // CONSTANTS
 
 const (
-	MOSQ_DEFAULT_PORT = 8883
+	MOSQ_DEFAULT_PORT = 1883
 )
 
 const (
