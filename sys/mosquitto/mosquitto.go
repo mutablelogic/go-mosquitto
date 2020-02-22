@@ -2,6 +2,9 @@ package mosquitto
 
 import (
 	"fmt"
+	"reflect"
+	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"unsafe"
@@ -12,10 +15,11 @@ import (
 
 /*
 #cgo pkg-config: libmosquitto
+#include <stdio.h>
 #include <stdlib.h>
 #include <mosquitto.h>
 
-extern void onConnect(struct mosquitto*, void*, int, int);
+extern void onConnect(struct mosquitto*, void*, int);
 extern void onDisconnect(struct mosquitto*, void*, int);
 extern void onPublish(struct mosquitto*, void*, int);
 extern void onSubscribe(struct mosquitto*, void*, int,int,int*);
@@ -24,13 +28,16 @@ extern void onMessage(struct mosquitto*, void*, struct mosquitto_message*);
 extern void onLog(struct mosquitto*,void*,int,char*);
 
 static void set_connect_callback(struct mosquitto*	client) {
-	mosquitto_connect_with_flags_callback_set(client,onConnect);
+	mosquitto_connect_callback_set(client,onConnect);
 }
 static void set_disconnect_callback(struct mosquitto* client) {
 	mosquitto_disconnect_callback_set(client,onDisconnect);
 }
 static void set_publish_callback(struct mosquitto* client) {
 	mosquitto_publish_callback_set(client,onPublish);
+}
+static void set_subscribe_callback(struct mosquitto* client) {
+	mosquitto_subscribe_callback_set(client,(void (*)(struct mosquitto *, void *, int, int, const int *))(onSubscribe));
 }
 static void set_unsubscribe_callback(struct mosquitto* client) {
 	mosquitto_unsubscribe_callback_set(client,onUnsubscribe);
@@ -41,9 +48,6 @@ static void set_message_callback(struct mosquitto* client) {
 static void set_log_callback(struct mosquitto*	client) {
 	mosquitto_log_callback_set(client,(void (*)(struct mosquitto *, void *, int, const char *))(onLog));
 }
-static void set_subscribe_callback(struct mosquitto* client) {
-	mosquitto_subscribe_callback_set(client,(void (*)(struct mosquitto *, void *, int, int, const int *))(onSubscribe));
-}
 */
 import "C"
 
@@ -52,19 +56,20 @@ import "C"
 
 type (
 	Error   int
+	Level   int
 	Client  C.struct_mosquitto
 	Message C.struct_mosquitto_message
 	Option  C.enum_mosq_opt_t
 )
 
 type (
-	ConnectCallback     func(userInfo uintptr, rc, flags int)
-	DisconnectCallback  func(userInfo uintptr, rc int)
-	SubscribeCallback   func(userInfo uintptr, messageId int, GrantedQOS []int)
-	UnsubscribeCallback func(userInfo uintptr, messageId int)
-	PublishCallback     func(userInfo uintptr, messageId int)
-	MessageCallback     func(userInfo uintptr, message *Message)
-	LogCallback         func(userInfo uintptr, level int, str string)
+	ConnectCallback     func(uintptr, int)
+	DisconnectCallback  func(uintptr, int)
+	SubscribeCallback   func(uintptr, int, []int)
+	UnsubscribeCallback func(uintptr, int)
+	PublishCallback     func(uintptr, int)
+	MessageCallback     func(uintptr, *Message)
+	LogCallback         func(uintptr, Level, string)
 )
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -119,6 +124,20 @@ const (
 	MOSQ_ERR_QOS_NOT_SUPPORTED  Error = 24
 	MOSQ_ERR_OVERSIZE_PACKET    Error = 25
 	MOSQ_ERR_OCSP               Error = 26
+)
+
+const (
+	MOSQ_LOG_NONE        Level = 0
+	MOSQ_LOG_INFO        Level = (1 << 0)
+	MOSQ_LOG_NOTICE      Level = (1 << 1)
+	MOSQ_LOG_WARNING     Level = (1 << 2)
+	MOSQ_LOG_ERR         Level = (1 << 3)
+	MOSQ_LOG_DEBUG       Level = (1 << 4)
+	MOSQ_LOG_SUBSCRIBE   Level = (1 << 5)
+	MOSQ_LOG_UNSUBSCRIBE Level = (1 << 6)
+	MOSQ_LOG_WEBSOCKETS  Level = (1 << 7)
+	MOSQ_LOG_MIN               = MOSQ_LOG_INFO
+	MOSQ_LOG_MAX               = MOSQ_LOG_WEBSOCKETS
 )
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -220,11 +239,9 @@ func (this *Client) SetCredentials(user, password string) error {
 }
 
 func (this *Client) Connect(host string, port int, keepalive int, async bool) error {
-	cHost := (*C.char)(nil)
-	if host != "" {
-		cHost = C.CString(host)
-		defer C.free(unsafe.Pointer(cHost))
-	}
+	cHost := C.CString(host)
+	defer C.free(unsafe.Pointer(cHost))
+
 	if async {
 		if err := Error(C.mosquitto_connect_async((*C.struct_mosquitto)(this), cHost, C.int(port), C.int(keepalive))); err != MOSQ_ERR_SUCCESS {
 			return err
@@ -241,15 +258,10 @@ func (this *Client) Connect(host string, port int, keepalive int, async bool) er
 }
 
 func (this *Client) ConnectBind(host, bindAddress string, port int, keepalive int, async bool) error {
-	cHost, cBindAddress := (*C.char)(nil), (*C.char)(nil)
-	if host != "" {
-		cHost = C.CString(host)
-		defer C.free(unsafe.Pointer(cHost))
-	}
-	if bindAddress != "" {
-		cBindAddress = C.CString(bindAddress)
-		defer C.free(unsafe.Pointer(cBindAddress))
-	}
+	cHost, cBindAddress := C.CString(host), C.CString(bindAddress)
+	defer C.free(unsafe.Pointer(cHost))
+	defer C.free(unsafe.Pointer(cBindAddress))
+
 	if async {
 		if err := Error(C.mosquitto_connect_bind_async((*C.struct_mosquitto)(this), cHost, C.int(port), C.int(keepalive), cBindAddress)); err != MOSQ_ERR_SUCCESS {
 			return err
@@ -325,6 +337,49 @@ func (this *Client) Loop(timeout_ms int) error {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+// SUBSCRIBE & UNSUBSCRIBE
+
+func (this *Client) Subscribe(topics string, qos int) (int, error) {
+	var messageId C.int
+	cTopics := C.CString(topics)
+	defer C.free(unsafe.Pointer(cTopics))
+
+	if err := Error(C.mosquitto_subscribe((*C.struct_mosquitto)(this), &messageId, cTopics, C.int(qos))); err != MOSQ_ERR_SUCCESS {
+		return 0, err
+	} else {
+		return int(messageId), nil
+	}
+}
+
+func (this *Client) Unsubscribe(topics string) (int, error) {
+	var messageId C.int
+	cTopics := C.CString(topics)
+	defer C.free(unsafe.Pointer(cTopics))
+
+	if err := Error(C.mosquitto_unsubscribe((*C.struct_mosquitto)(this), &messageId, cTopics)); err != MOSQ_ERR_SUCCESS {
+		return 0, err
+	} else {
+		return int(messageId), nil
+	}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// PUBLISH
+
+func (this *Client) Publish(topic string, data []byte, qos int, retain bool) (int, error) {
+	var messageId C.int
+	cTopic := C.CString(topic)
+	defer C.free(unsafe.Pointer(cTopic))
+	payloadlen := len(data)
+	payload := unsafe.Pointer(&data[0])
+	if err := Error(C.mosquitto_publish((*C.struct_mosquitto)(this), &messageId, cTopic, C.int(payloadlen), unsafe.Pointer(payload), C.int(qos), C.bool(retain))); err != MOSQ_ERR_SUCCESS {
+		return 0, err
+	} else {
+		return int(messageId), nil
+	}
+}
+
+////////////////////////////////////////////////////////////////////////////////
 // CLIENT OPTIONS
 
 func (this *Client) SetOptionInt(key Option, value int) error {
@@ -383,6 +438,74 @@ func (this *Client) userInfo() uintptr {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+// MESSAGES
+
+func NewMessage(id int) *Message {
+	this := new(Message)
+	this.mid = C.int(id)
+	return this
+}
+
+func (this *Message) Free() {
+	handle := (*C.struct_mosquitto_message)(this)
+	C.mosquitto_message_free(&handle)
+}
+
+func (this *Message) FreeContents() {
+	C.mosquitto_message_free_contents((*C.struct_mosquitto_message)(this))
+}
+
+func (this *Message) Id() int {
+	return int(this.mid)
+}
+
+func (this *Message) Topic() string {
+	if this.topic == nil {
+		return ""
+	} else {
+		return C.GoString(this.topic)
+	}
+}
+
+func (this *Message) Len() uint {
+	return uint(this.payloadlen)
+}
+
+func (this *Message) Qos() int {
+	return int(this.qos)
+}
+
+func (this *Message) Retain() bool {
+	return bool(this.retain)
+}
+
+func (this *Message) Data() []byte {
+	var data []byte
+	header := (*reflect.SliceHeader)(unsafe.Pointer(&data))
+	header.Data = uintptr(this.payload)
+	header.Len = int(this.payloadlen)
+	header.Cap = int(this.payloadlen)
+	return data
+}
+
+func (this *Message) String() string {
+	str := "<mosq.Message"
+	if id := this.Id(); id != 0 {
+		str += " id=" + fmt.Sprint(this.Id())
+	}
+	if topic := this.Topic(); topic != "" {
+		str += " topic=" + strconv.Quote(topic)
+	}
+	if this.Len() > 0 {
+		str += " data=" + fmt.Sprint(this.Data())
+	}
+	if this.Retain() {
+		str += " retain=" + fmt.Sprint(true)
+	}
+	return str + ">"
+}
+
+////////////////////////////////////////////////////////////////////////////////
 // CALLBACKS
 
 func (this *Client) SetConnectCallback(cb ConnectCallback) error {
@@ -411,6 +534,7 @@ func (this *Client) SetDisconnectCallback(cb DisconnectCallback) error {
 	c.DisconnectCallback = cb
 	callbacks[handle] = c
 
+	// Return success
 	return nil
 }
 
@@ -425,6 +549,7 @@ func (this *Client) SetPublishCallback(cb PublishCallback) error {
 	c.PublishCallback = cb
 	callbacks[handle] = c
 
+	// Return success
 	return nil
 }
 
@@ -439,6 +564,7 @@ func (this *Client) SetSubscribeCallback(cb SubscribeCallback) error {
 	c.SubscribeCallback = cb
 	callbacks[handle] = c
 
+	// Return success
 	return nil
 }
 
@@ -453,6 +579,7 @@ func (this *Client) SetUnsubscribeCallback(cb UnsubscribeCallback) error {
 	c.UnsubscribeCallback = cb
 	callbacks[handle] = c
 
+	// Return success
 	return nil
 }
 
@@ -467,6 +594,7 @@ func (this *Client) SetMessageCallback(cb MessageCallback) error {
 	c.MessageCallback = cb
 	callbacks[handle] = c
 
+	// Return success
 	return nil
 }
 
@@ -481,16 +609,17 @@ func (this *Client) SetLogCallback(cb LogCallback) error {
 	c.LogCallback = cb
 	callbacks[handle] = c
 
+	// Return success
 	return nil
 }
 
 //export onConnect
-func onConnect(handle *C.struct_mosquitto, userInfo unsafe.Pointer, rc C.int, flags C.int) {
+func onConnect(handle *C.struct_mosquitto, userInfo unsafe.Pointer, rc C.int) {
 	mutex.RLock()
 	defer mutex.RUnlock()
 
 	if c, exists := callbacks[handle]; exists && c.ConnectCallback != nil {
-		c.ConnectCallback(uintptr(userInfo), int(rc), int(flags))
+		c.ConnectCallback(uintptr(userInfo), int(rc))
 	}
 }
 
@@ -509,7 +638,9 @@ func onPublish(handle *C.struct_mosquitto, userInfo unsafe.Pointer, messageId C.
 	mutex.RLock()
 	defer mutex.RUnlock()
 
-	fmt.Println("onPublish called")
+	if c, exists := callbacks[handle]; exists && c.PublishCallback != nil {
+		c.PublishCallback(uintptr(userInfo), int(messageId))
+	}
 }
 
 //export onSubscribe
@@ -517,7 +648,19 @@ func onSubscribe(handle *C.struct_mosquitto, userInfo unsafe.Pointer, messageId 
 	mutex.RLock()
 	defer mutex.RUnlock()
 
-	fmt.Println("onSubscribe called")
+	if c, exists := callbacks[handle]; exists && c.SubscribeCallback != nil {
+		var data []C.int
+		header := (*reflect.SliceHeader)(unsafe.Pointer(&data))
+		header.Data = uintptr(unsafe.Pointer(grantedQos))
+		header.Len = int(qosCount)
+		header.Cap = int(qosCount)
+
+		qos := make([]int, len(data))
+		for i, value := range data {
+			qos[i] = int(value)
+		}
+		c.SubscribeCallback(uintptr(userInfo), int(messageId), qos)
+	}
 }
 
 //export onUnsubscribe
@@ -525,15 +668,19 @@ func onUnsubscribe(handle *C.struct_mosquitto, userInfo unsafe.Pointer, messageI
 	mutex.RLock()
 	defer mutex.RUnlock()
 
-	fmt.Println("onUnsubscribe called")
+	if c, exists := callbacks[handle]; exists && c.UnsubscribeCallback != nil {
+		c.UnsubscribeCallback(uintptr(userInfo), int(messageId))
+	}
 }
 
 //export onMessage
-func onMessage(handle *C.struct_mosquitto, userInfo unsafe.Pointer, messageId *C.struct_mosquitto_message) {
+func onMessage(handle *C.struct_mosquitto, userInfo unsafe.Pointer, message *C.struct_mosquitto_message) {
 	mutex.RLock()
 	defer mutex.RUnlock()
 
-	fmt.Println("onMessage called")
+	if c, exists := callbacks[handle]; exists && c.MessageCallback != nil {
+		c.MessageCallback(uintptr(userInfo), (*Message)(message))
+	}
 }
 
 //export onLog
@@ -541,11 +688,15 @@ func onLog(handle *C.struct_mosquitto, userInfo unsafe.Pointer, level C.int, str
 	mutex.RLock()
 	defer mutex.RUnlock()
 
-	fmt.Println("onLog called")
+	if c, exists := callbacks[handle]; exists && c.LogCallback != nil {
+		if str != nil {
+			c.LogCallback(uintptr(userInfo), Level(level), C.GoString(str))
+		}
+	}
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// ERRORS
+// STRINGIFY
 
 func (e Error) Error() string {
 	switch e {
@@ -641,4 +792,42 @@ func (v Option) String() string {
 	default:
 		return "[?? Invalid Option value]"
 	}
+}
+
+func (f Level) StringFlag() string {
+	switch f {
+	case MOSQ_LOG_NONE:
+		return "MOSQ_LOG_NONE"
+	case MOSQ_LOG_INFO:
+		return "MOSQ_LOG_INFO"
+	case MOSQ_LOG_NOTICE:
+		return "MOSQ_LOG_NOTICE"
+	case MOSQ_LOG_WARNING:
+		return "MOSQ_LOG_WARNING"
+	case MOSQ_LOG_ERR:
+		return "MOSQ_LOG_ERR"
+	case MOSQ_LOG_DEBUG:
+		return "MOSQ_LOG_DEBUG"
+	case MOSQ_LOG_SUBSCRIBE:
+		return "MOSQ_LOG_SUBSCRIBE"
+	case MOSQ_LOG_UNSUBSCRIBE:
+		return "MOSQ_LOG_UNSUBSCRIBE"
+	case MOSQ_LOG_WEBSOCKETS:
+		return "MOSQ_LOG_WEBSOCKETS"
+	default:
+		return "[?? Invalid Level value]"
+	}
+}
+
+func (f Level) String() string {
+	if f == MOSQ_LOG_NONE {
+		return f.StringFlag()
+	}
+	str := ""
+	for v := MOSQ_LOG_MIN; v <= MOSQ_LOG_MAX; v <<= 1 {
+		if f&v == v {
+			str += v.StringFlag() + "|"
+		}
+	}
+	return strings.TrimSuffix(str, "|")
 }
