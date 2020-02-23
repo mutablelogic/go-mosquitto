@@ -28,7 +28,7 @@ func Main(app gopi.App, args []string) error {
 
 	// Connect client
 	client := app.UnitInstance("mosquitto").(mosquitto.Client)
-	if err := client.Connect(mosquitto.MOSQ_FLAG_EVENT_ALL); err != nil {
+	if err := client.Connect(); err != nil {
 		return err
 	}
 

@@ -21,8 +21,8 @@ type (
 
 // Client implements an MQTT client
 type Client interface {
-	// Connect to MQTT broker with event flags
-	Connect(Flags) error
+	// Connect to MQTT broker with options
+	Connect(...Opt) error
 
 	// Disconnect from MQTT broker
 	Disconnect() error
@@ -36,7 +36,8 @@ type Client interface {
 	// Publish []byte data to topic and return request-id
 	Publish(string, []byte, ...Opt) (int, error)
 
-	// Wait for a specific request-id
+	// Wait for a specific request-id or 0 for a connect or disconnect event
+	// with context (for timeout)
 	WaitFor(context.Context, int) (Event, error)
 
 	// Implements gopi.Unit
@@ -59,16 +60,19 @@ type Event interface {
 
 // Function options
 type Opt struct {
-	Type Option
-	Int  int
-	Bool bool
+	Type  Option
+	Int   int
+	Bool  bool
+	Flags Flags
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 // MQTT Options
 
-func OptQOS(value int) Opt     { return Opt{Type: MOSQ_OPTION_QOS, Int: value} }
-func OptRetain(value bool) Opt { return Opt{Type: MOSQ_OPTION_RETAIN, Bool: value} }
+func OptQOS(value int) Opt           { return Opt{Type: MOSQ_OPTION_QOS, Int: value} }
+func OptRetain(value bool) Opt       { return Opt{Type: MOSQ_OPTION_RETAIN, Bool: value} }
+func OptFlags(value Flags) Opt       { return Opt{Type: MOSQ_OPTION_FLAGS, Flags: value} }
+func OptKeepaliveSecs(value int) Opt { return Opt{Type: MOSQ_OPTION_KEEPALIVE, Int: value} }
 
 ////////////////////////////////////////////////////////////////////////////////
 // CONSTANTS
@@ -88,9 +92,11 @@ const (
 )
 
 const (
-	MOSQ_OPTION_NONE   Option = iota
-	MOSQ_OPTION_QOS           // IntValue
-	MOSQ_OPTION_RETAIN        // BoolValue
+	MOSQ_OPTION_NONE      Option = iota
+	MOSQ_OPTION_QOS              // IntValue
+	MOSQ_OPTION_RETAIN           // BoolValue
+	MOSQ_OPTION_FLAGS            // FlagsValue
+	MOSQ_OPTION_KEEPALIVE        // IntValue
 )
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -140,6 +146,10 @@ func (o Option) String() string {
 		return "MOSQ_OPTION_QOS"
 	case MOSQ_OPTION_RETAIN:
 		return "MOSQ_OPTION_RETAIN"
+	case MOSQ_OPTION_FLAGS:
+		return "MOSQ_OPTION_FLAGS"
+	case MOSQ_OPTION_KEEPALIVE:
+		return "MOSQ_OPTION_KEEPALIVE"
 	default:
 		return "[?? Invalid Option value]"
 	}

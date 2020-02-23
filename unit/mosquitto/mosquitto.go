@@ -3,9 +3,10 @@ package mosquitto
 import (
 	"context"
 	"fmt"
+	"net"
+	"regexp"
 	"strconv"
 	"sync"
-	"time"
 
 	// Frameworks
 	gopi "github.com/djthorpe/gopi/v2"
@@ -18,20 +19,17 @@ import (
 // TYPES
 
 type Mosquitto struct {
-	ClientId  string
-	User      string
-	Password  string
-	Host      string
-	Port      uint
-	Keepalive time.Duration
-	Bus       gopi.Bus
+	ClientId string
+	User     string
+	Password string
+	Broker   string
+	Bus      gopi.Bus
 }
 
 type mosquitto struct {
 	host      string
 	port      uint
 	client    *mosq.Client
-	keepalive time.Duration
 	connected bool
 	bus       gopi.Bus
 
@@ -39,6 +37,13 @@ type mosquitto struct {
 	sync.Mutex
 	sync.WaitGroup
 }
+
+////////////////////////////////////////////////////////////////////////////////
+// GLOBALS
+
+var (
+	reHostPort = regexp.MustCompile("^([^\\:]+)\\:(\\d+)$")
+)
 
 ////////////////////////////////////////////////////////////////////////////////
 // IMPLEMENTATION gopi.Unit
@@ -60,7 +65,6 @@ func (config Mosquitto) New(log gopi.Logger) (gopi.Unit, error) {
 // IMPLEMENTATION mosquitto.Client
 
 func (this *mosquitto) Init(config Mosquitto) error {
-
 	// Bus
 	if config.Bus == nil {
 		return gopi.ErrBadParameter.WithPrefix("bus")
@@ -71,29 +75,26 @@ func (this *mosquitto) Init(config Mosquitto) error {
 	// Initialize
 	if err := mosq.Init(); err != nil {
 		return err
-	} else if client, err := mosq.New(config.ClientId, true, uintptr(0)); err != nil {
+	} else if client, err := mosq.New(config.ClientId, true, 0); err != nil {
 		return fmt.Errorf("New: %w", err)
 	} else {
 		this.client = client
 	}
 
+	// Add the port on the end if not added
+	if config.Broker == "" {
+		return gopi.ErrBadParameter.WithPrefix("-mqtt.broker")
+	} else if reHostPort.MatchString(config.Broker) == false {
+		config.Broker = fmt.Sprintf("%v:%v", config.Broker, mosq.MOSQ_DEFAULT_PORT)
+	}
 	// Check host and port
-	if config.Host == "" {
-		return gopi.ErrBadParameter.WithPrefix("host")
+	if host, port, err := net.SplitHostPort(config.Broker); err != nil {
+		return gopi.ErrBadParameter.WithPrefix("-mqtt.broker")
+	} else if port_, err := strconv.ParseUint(port, 10, 32); err != nil {
+		return gopi.ErrBadParameter.WithPrefix("-mqtt.broker")
 	} else {
-		this.host = config.Host
-	}
-	if config.Port == 0 {
-		this.port = mosq.MOSQ_DEFAULT_PORT
-	} else {
-		this.port = config.Port
-	}
-
-	// Set keep alive
-	if config.Keepalive == 0 {
-		return gopi.ErrBadParameter.WithPrefix("keepalive")
-	} else {
-		this.keepalive = config.Keepalive
+		this.host = host
+		this.port = uint(port_)
 	}
 
 	// Set credentials
@@ -129,9 +130,23 @@ func (this *mosquitto) Close() error {
 ////////////////////////////////////////////////////////////////////////////////
 // CONNECT AND DISCONNECT
 
-func (this *mosquitto) Connect(flags iface.Flags) error {
+func (this *mosquitto) Connect(opts ...iface.Opt) error {
 	this.Mutex.Lock()
 	defer this.Mutex.Unlock()
+
+	// Process options
+	flags := iface.MOSQ_FLAG_EVENT_ALL
+	keepalive_secs := int(60)
+	for _, opt := range opts {
+		switch opt.Type {
+		case iface.MOSQ_OPTION_FLAGS:
+			flags = opt.Flags
+		case iface.MOSQ_OPTION_KEEPALIVE:
+			keepalive_secs = opt.Int
+		default:
+			return gopi.ErrBadParameter.WithPrefix(fmt.Sprint(opt.Type))
+		}
+	}
 
 	// Set flags
 	if flags&iface.MOSQ_FLAG_EVENT_CONNECT == iface.MOSQ_FLAG_EVENT_CONNECT {
@@ -196,9 +211,7 @@ func (this *mosquitto) Connect(flags iface.Flags) error {
 	}
 
 	// Perform connection, start loop
-	if keepalive_secs := int(this.keepalive.Seconds()); keepalive_secs < 1 {
-		return gopi.ErrBadParameter.WithPrefix("keepalive")
-	} else if err := this.client.LoopStart(); err != nil {
+	if err := this.client.LoopStart(); err != nil {
 		return err
 	} else if err := this.client.Connect(this.host, int(this.port), keepalive_secs, false); err != nil {
 		this.client.LoopStop(true)
@@ -244,7 +257,7 @@ func (this *mosquitto) Version() string {
 func (this *mosquitto) String() string {
 	str := "<mosq.Client"
 	str += " version=" + strconv.Quote(this.Version())
-	str += " host=" + fmt.Sprintf("%v:%v", this.host, this.port)
+	str += " broker=" + fmt.Sprintf("%v:%v", this.host, this.port)
 	str += " connected=" + fmt.Sprint(this.connected)
 	return str + ">"
 }

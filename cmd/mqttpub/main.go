@@ -23,7 +23,7 @@ func Main(app gopi.App, args []string) error {
 		return gopi.ErrBadParameter.WithPrefix("topic")
 	} else if len(args) == 0 {
 		return gopi.ErrHelp
-	} else if err := client.Connect(mosquitto.MOSQ_FLAG_EVENT_ALL); err != nil {
+	} else if err := client.Connect(); err != nil {
 		return err
 	} else {
 		// Wait for connect

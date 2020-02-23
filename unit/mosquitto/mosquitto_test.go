@@ -17,8 +17,7 @@ import (
 )
 
 const (
-	TEST_SERVER         = "test.mosquitto.org"
-	TEST_PORT_PLAINTEXT = 1883
+	TEST_SERVER = "test.mosquitto.org:1883"
 )
 
 func Test_Mosquitto_000(t *testing.T) {
@@ -26,7 +25,7 @@ func Test_Mosquitto_000(t *testing.T) {
 }
 
 func Test_Mosquitto_001(t *testing.T) {
-	args := []string{"-mqtt.host", TEST_SERVER, "-mqtt.port", fmt.Sprint(TEST_PORT_PLAINTEXT)}
+	args := []string{"-mqtt.broker", TEST_SERVER}
 	if app, err := app.NewTestTool(t, Main_Test_Mosquitto_001, args, "mosquitto"); err != nil {
 		t.Error(err)
 	} else {
@@ -40,7 +39,7 @@ func Main_Test_Mosquitto_001(app gopi.App, t *testing.T) {
 	bus.DefaultHandler(gopi.EVENT_NS_DEFAULT, func(_ context.Context, _ gopi.App, evt gopi.Event) {
 		t.Log(evt)
 	})
-	if err := mosquitto.Connect(mosq.MOSQ_FLAG_EVENT_ALL); err != nil {
+	if err := mosquitto.Connect(); err != nil {
 		t.Error(err)
 	} else if _, err := mosquitto.Subscribe("#"); err != nil {
 		t.Error(err)
@@ -50,7 +49,7 @@ func Main_Test_Mosquitto_001(app gopi.App, t *testing.T) {
 }
 
 func Test_Mosquitto_002(t *testing.T) {
-	args := []string{"-mqtt.host", TEST_SERVER, "-mqtt.port", fmt.Sprint(TEST_PORT_PLAINTEXT)}
+	args := []string{"-mqtt.broker", TEST_SERVER}
 	if app, err := app.NewTestTool(t, Main_Test_Mosquitto_002, args, "mosquitto"); err != nil {
 		t.Error(err)
 	} else {
@@ -64,7 +63,7 @@ func Main_Test_Mosquitto_002(app gopi.App, t *testing.T) {
 	bus.DefaultHandler(gopi.EVENT_NS_DEFAULT, func(_ context.Context, _ gopi.App, evt gopi.Event) {
 		t.Log(evt)
 	})
-	if err := mosquitto.Connect(mosq.MOSQ_FLAG_EVENT_ALL); err != nil {
+	if err := mosquitto.Connect(); err != nil {
 		t.Error(err)
 	} else {
 		time.Sleep(2 * time.Second)
