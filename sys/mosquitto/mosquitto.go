@@ -180,8 +180,6 @@ func Init() error {
 func Cleanup() error {
 	if err := Error(C.mosquitto_lib_cleanup()); err != MOSQ_ERR_SUCCESS {
 		return err
-	} else {
-		return nil
 	}
 
 	// Release callback resources
@@ -191,6 +189,9 @@ func Cleanup() error {
 		delete(callbacks, k)
 	}
 	callbacks = nil
+
+	// Return success
+	return nil
 }
 
 ////////////////////////////////////////////////////////////////////////////////
