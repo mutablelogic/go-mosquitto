@@ -14,10 +14,12 @@ GOLDFLAGS += -X $(GOPI).GoBuildTime=$(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
 GOFLAGS = -ldflags "-s -w $(GOLDFLAGS)" 
 
 install:
-	$(GOINSTALL) $(GOFLAGS) ./cmd/mosquittosub
+	$(GOINSTALL) $(GOFLAGS) ./cmd/mqttsub
+	$(GOINSTALL) $(GOFLAGS) ./cmd/mqttpub
 
 test: 
-	$(GOTEST) -v ./...
+	$(GOTEST) -v ./sys/...
+	$(GOTEST) -v ./unit/...
 
 clean: 
 	$(GOCLEAN)
