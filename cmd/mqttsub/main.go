@@ -14,7 +14,7 @@ import (
 )
 
 var (
-	Format = "%-10v %-40v %-28v\n"
+	Format = "%-10v %-40v %-40v\n"
 	Header sync.Once
 )
 
@@ -56,13 +56,13 @@ func EventHandler(_ context.Context, app gopi.App, evt_ gopi.Event) {
 
 	Header.Do(func() {
 		fmt.Printf(Format, "TYPE", "TOPIC", "DATA")
-		fmt.Printf(Format, strings.Repeat("-", 10), strings.Repeat("-", 40), strings.Repeat("-", 28))
+		fmt.Printf(Format, strings.Repeat("-", 10), strings.Repeat("-", 40), strings.Repeat("-", 40))
 	})
 	message := strings.TrimPrefix(fmt.Sprint(evt.Type()), "MOSQ_FLAG_EVENT_")
 	topic := TruncateString(evt.Topic(), 40)
 	data := "<nil>"
 	if len(evt.Data()) > 0 {
-		data = TruncateString(strconv.Quote(string(evt.Data())), 28)
+		data = TruncateString(strconv.Quote(string(evt.Data())), 40)
 	}
 	fmt.Printf(Format, message, topic, data)
 }

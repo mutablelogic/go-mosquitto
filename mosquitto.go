@@ -2,7 +2,9 @@ package mosquitto
 
 import (
 	"context"
+	"fmt"
 	"strings"
+	"time"
 
 	// Frameworks
 	"github.com/djthorpe/gopi/v2"
@@ -36,6 +38,12 @@ type Client interface {
 	// Publish []byte data to topic and return request-id
 	Publish(string, []byte, ...Opt) (int, error)
 
+	// Publish JSON data to topic and return request-id
+	PublishJSON(string, interface{}, ...Opt) (int, error)
+
+	// Publish measurements in influxdata line protocol format and return request-id
+	PublishInflux(string, string, map[string]interface{}, ...Opt) (int, error)
+
 	// Wait for a specific request-id or 0 for a connect or disconnect event
 	// with context (for timeout)
 	WaitFor(context.Context, int) (Event, error)
@@ -60,10 +68,12 @@ type Event interface {
 
 // Function options
 type Opt struct {
-	Type  Option
-	Int   int
-	Bool  bool
-	Flags Flags
+	Type      Option
+	Int       int
+	Bool      bool
+	Flags     Flags
+	String    string
+	Timestamp time.Time
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -73,6 +83,10 @@ func OptQOS(value int) Opt           { return Opt{Type: MOSQ_OPTION_QOS, Int: va
 func OptRetain(value bool) Opt       { return Opt{Type: MOSQ_OPTION_RETAIN, Bool: value} }
 func OptFlags(value Flags) Opt       { return Opt{Type: MOSQ_OPTION_FLAGS, Flags: value} }
 func OptKeepaliveSecs(value int) Opt { return Opt{Type: MOSQ_OPTION_KEEPALIVE, Int: value} }
+func OptTag(name, value string) Opt {
+	return Opt{Type: MOSQ_OPTION_TAG, String: fmt.Sprintf("%s=%s", strings.TrimSpace(name), strings.TrimSpace(value))}
+}
+func OptTimestamp(value time.Time) Opt { return Opt{Type: MOSQ_OPTION_TIMESTAMP, Timestamp: value} }
 
 ////////////////////////////////////////////////////////////////////////////////
 // CONSTANTS
@@ -97,6 +111,8 @@ const (
 	MOSQ_OPTION_RETAIN           // BoolValue
 	MOSQ_OPTION_FLAGS            // FlagsValue
 	MOSQ_OPTION_KEEPALIVE        // IntValue
+	MOSQ_OPTION_TAG              // StringValue
+	MOSQ_OPTION_TIMESTAMP        // TimeValue
 )
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -150,6 +166,10 @@ func (o Option) String() string {
 		return "MOSQ_OPTION_FLAGS"
 	case MOSQ_OPTION_KEEPALIVE:
 		return "MOSQ_OPTION_KEEPALIVE"
+	case MOSQ_OPTION_TAG:
+		return "MOSQ_OPTION_TAG"
+	case MOSQ_OPTION_TIMESTAMP:
+		return "MOSQ_OPTION_TIMESTAMP"
 	default:
 		return "[?? Invalid Option value]"
 	}

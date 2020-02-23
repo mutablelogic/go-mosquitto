@@ -84,3 +84,69 @@ func Main_Test_Mosquitto_002(app gopi.App, t *testing.T) {
 		}
 	}
 }
+
+func Test_Mosquitto_003(t *testing.T) {
+	args := []string{"-mqtt.broker", TEST_SERVER}
+	if app, err := app.NewTestTool(t, Main_Test_Mosquitto_003, args, "mosquitto"); err != nil {
+		t.Error(err)
+	} else {
+		app.Run()
+	}
+}
+
+func Main_Test_Mosquitto_003(app gopi.App, t *testing.T) {
+	mosquitto := app.UnitInstance("mosquitto").(mosq.Client)
+	bus := app.Bus()
+	bus.DefaultHandler(gopi.EVENT_NS_DEFAULT, func(_ context.Context, _ gopi.App, evt gopi.Event) {
+		t.Log(evt)
+	})
+	if err := mosquitto.Connect(); err != nil {
+		t.Error(err)
+	} else {
+		time.Sleep(2 * time.Second)
+		for i := 0; i < 10; i++ {
+			if _, err := mosquitto.PublishJSON("test", 100.8); err != nil {
+				t.Error(err)
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+		if err := mosquitto.Disconnect(); err != nil {
+			t.Error(err)
+		}
+	}
+}
+
+func Test_Mosquitto_004(t *testing.T) {
+	args := []string{"-mqtt.broker", TEST_SERVER}
+	if app, err := app.NewTestTool(t, Main_Test_Mosquitto_004, args, "mosquitto"); err != nil {
+		t.Error(err)
+	} else {
+		app.Run()
+	}
+}
+
+func Main_Test_Mosquitto_004(app gopi.App, t *testing.T) {
+	mosquitto := app.UnitInstance("mosquitto").(mosq.Client)
+	bus := app.Bus()
+	bus.DefaultHandler(gopi.EVENT_NS_DEFAULT, func(_ context.Context, _ gopi.App, evt gopi.Event) {
+		t.Log(evt)
+	})
+	if err := mosquitto.Connect(); err != nil {
+		t.Error(err)
+	} else {
+		time.Sleep(2 * time.Second)
+		for i := 0; i < 10; i++ {
+			fields := map[string]interface{}{
+				"v1": i,
+				"v2": float64(i) / 2,
+			}
+			if _, err := mosquitto.PublishInflux("test", "test", fields, mosq.OptTag("host", "rpi4.lan"), mosq.OptTimestamp(time.Now())); err != nil {
+				t.Error(err)
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+		if err := mosquitto.Disconnect(); err != nil {
+			t.Error(err)
+		}
+	}
+}

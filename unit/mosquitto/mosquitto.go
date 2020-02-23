@@ -2,10 +2,12 @@ package mosquitto
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 
 	// Frameworks
@@ -337,6 +339,62 @@ func (this *mosquitto) Publish(topic string, data []byte, opts ...iface.Opt) (in
 	} else {
 		return id, nil
 	}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// PUBLISH JSON & INFLUX FORMATS
+
+func (this *mosquitto) PublishJSON(topic string, data interface{}, opts ...iface.Opt) (int, error) {
+	if json, err := json.Marshal(data); err != nil {
+		return 0, err
+	} else {
+		return this.Publish(topic, json, opts...)
+	}
+}
+
+// Influx line protocol
+// https://docs.influxdata.com/influxdb/v1.7/write_protocols/line_protocol_tutorial/
+// Include one or more OptTag(name,value) for tags
+// Include one OptTimestamp(time.Time) to set timestamp
+func (this *mosquitto) PublishInflux(topic string, measurement string, fields map[string]interface{}, opts ...iface.Opt) (int, error) {
+	// Check parameters
+	if len(fields) == 0 {
+		return 0, gopi.ErrBadParameter.WithPrefix("fields")
+	}
+	if measurement == "" {
+		return 0, gopi.ErrBadParameter.WithPrefix("measurement")
+	}
+
+	// Process options
+	str := strings.TrimSpace(measurement)
+	ts := ""
+	other := make([]iface.Opt, 0, len(opts))
+	for _, opt := range opts {
+		switch opt.Type {
+		case iface.MOSQ_OPTION_TAG:
+			str += "," + opt.String
+		case iface.MOSQ_OPTION_TIMESTAMP:
+			ts = " " + fmt.Sprint(opt.Timestamp.UnixNano())
+		default:
+			other = append(other, opt)
+		}
+	}
+
+	// Process fields
+	delim := " "
+	for k, v := range fields {
+		switch v.(type) {
+		case float32, float64, bool, int, uint, int8, uint8, int16, uint16, int32, uint32, int64, uint64:
+			str += delim + fmt.Sprintf("%v=%v", strings.TrimSpace(k), v)
+		case string:
+			str += delim + fmt.Sprintf("%v=%v", strings.TrimSpace(k), strconv.Quote(v.(string)))
+		default:
+			return 0, gopi.ErrBadParameter.WithPrefix(k)
+		}
+		delim = ","
+	}
+
+	return this.Publish(topic, []byte(str+ts), other...)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
