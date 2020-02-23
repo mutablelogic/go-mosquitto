@@ -1,6 +1,15 @@
 # mosquitto
 
-Golang Mosquitto client library, which conforms to the MQTT standard.
+Golang Mosquitto client library, which conforms to the MQTT standard. This
+documentation includes the following information:
+
+  * What dependencies are needed in order to use this package
+  * Information about the two command-line tools, `mqttpub` and `mqttsub`
+  * Using the `libmosquitto` bindings
+  * Alternatively, using the `gopi.Unit` interface
+
+This repository is published under the Apache license. Please use the [issues](https://github.com/djthorpe/mosquitto/issues) tab on Github to file bugs, ask for features or
+for general discussion.
 
 ## Dependencies
 
@@ -233,4 +242,6 @@ const (
 )
 ```
 
+Please see the sample code under the `cmd` folder in the repository for
+examples on using the code.
 
