@@ -382,6 +382,7 @@ func (this *Client) Publish(topic string, data []byte, qos int, retain bool) (in
 ////////////////////////////////////////////////////////////////////////////////
 // CLIENT OPTIONS
 
+/*
 func (this *Client) SetOptionInt(key Option, value int) error {
 	if err := Error(C.mosquitto_int_option((*C.struct_mosquitto)(this), C.enum_mosq_opt_t(key), C.int(value))); err != MOSQ_ERR_SUCCESS {
 		return err
@@ -410,6 +411,7 @@ func (this *Client) SetOptionString(key Option, value string) error {
 		return nil
 	}
 }
+*/
 
 func (this *Client) SetReconnectDelay(delay, max uint, exponential bool) error {
 	if err := Error(C.mosquitto_reconnect_delay_set((*C.struct_mosquitto)(this), C.uint(delay), C.uint(max), C.bool(exponential))); err != MOSQ_ERR_SUCCESS {
@@ -427,6 +429,7 @@ func (this *Client) SetMaxInflightMessages(max uint) error {
 	}
 }
 
+/*
 func (this *Client) SetUserInfo(userInfo uintptr) error {
 	C.mosquitto_user_data_set((*C.struct_mosquitto)(this), unsafe.Pointer(userInfo))
 	return nil
@@ -436,6 +439,7 @@ func (this *Client) userInfo() uintptr {
 	ptr := C.mosquitto_userdata((*C.struct_mosquitto)(this))
 	return uintptr(ptr)
 }
+*/
 
 ////////////////////////////////////////////////////////////////////////////////
 // MESSAGES
@@ -449,6 +453,15 @@ func NewMessage(id int) *Message {
 func (this *Message) Free() {
 	handle := (*C.struct_mosquitto_message)(this)
 	C.mosquitto_message_free(&handle)
+}
+
+func (this *Message) Copy() *Message {
+	other := new(Message)
+	if err := Error(C.mosquitto_message_copy((*C.struct_mosquitto_message)(other), (*C.struct_mosquitto_message)(this))); err != MOSQ_ERR_SUCCESS {
+		return nil
+	} else {
+		return other
+	}
 }
 
 func (this *Message) FreeContents() {

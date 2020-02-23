@@ -14,24 +14,22 @@ import (
 )
 
 var (
-	Format = "%-8v %-40v %-30v\n"
+	Format = "%-10v %-40v %-28v\n"
 	Header sync.Once
 )
 
 ////////////////////////////////////////////////////////////////////////////////
 
 func Main(app gopi.App, args []string) error {
-	// Connect client
-	client := app.UnitInstance("mosquitto").(mosquitto.Client)
-	if err := client.Connect(mosquitto.MOSQ_FLAG_EVENT_MESSAGE); err != nil {
-		return err
+	// Check args
+	if len(args) == 0 {
+		return gopi.ErrHelp
 	}
 
-	// Subscribe to topics
-	for _, topic := range args {
-		if _, err := client.Subscribe(topic, 0); err != nil {
-			return err
-		}
+	// Connect client
+	client := app.UnitInstance("mosquitto").(mosquitto.Client)
+	if err := client.Connect(mosquitto.MOSQ_FLAG_EVENT_ALL); err != nil {
+		return err
 	}
 
 	// Wait for CTRL+C
@@ -44,13 +42,28 @@ func Main(app gopi.App, args []string) error {
 
 func EventHandler(_ context.Context, app gopi.App, evt_ gopi.Event) {
 	evt := evt_.(mosquitto.Event)
+	client := app.UnitInstance("mosquitto").(mosquitto.Client)
+
+	// Subscribe to topics
+	if evt.Type() == mosquitto.MOSQ_FLAG_EVENT_CONNECT && evt.ReturnCode() == 0 {
+		// Subscribe to topics
+		for _, topic := range app.Flags().Args() {
+			if _, err := client.Subscribe(topic); err != nil {
+				app.Log().Error(err)
+			}
+		}
+	}
+
 	Header.Do(func() {
 		fmt.Printf(Format, "TYPE", "TOPIC", "DATA")
-		fmt.Printf(Format, strings.Repeat("-", 8), strings.Repeat("-", 40), strings.Repeat("-", 30))
+		fmt.Printf(Format, strings.Repeat("-", 10), strings.Repeat("-", 40), strings.Repeat("-", 28))
 	})
 	message := strings.TrimPrefix(fmt.Sprint(evt.Type()), "MOSQ_FLAG_EVENT_")
 	topic := TruncateString(evt.Topic(), 40)
-	data := TruncateString(strconv.Quote(string(evt.Data())), 30)
+	data := "<nil>"
+	if len(evt.Data()) > 0 {
+		data = TruncateString(strconv.Quote(string(evt.Data())), 28)
+	}
 	fmt.Printf(Format, message, topic, data)
 }
 

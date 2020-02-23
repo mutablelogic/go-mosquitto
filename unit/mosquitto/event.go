@@ -2,10 +2,9 @@ package mosquitto
 
 import (
 	// Frameworks
-	"encoding/hex"
+
 	"fmt"
 	"strconv"
-	"strings"
 
 	gopi "github.com/djthorpe/gopi/v2"
 	iface "github.com/djthorpe/mosquitto"
@@ -72,7 +71,7 @@ func NewMessage(source gopi.Unit, id int, topic string, data []byte) iface.Event
 	this.Type_ = iface.MOSQ_FLAG_EVENT_MESSAGE
 	this.Id_ = id
 	this.Topic_ = topic
-	this.Data_ = data
+	this.Data_ = data[:]
 	return this
 }
 
@@ -134,7 +133,7 @@ func (this *event) String() string {
 		str += " topic=" + strconv.Quote(this.Topic_)
 	}
 	if this.Data_ != nil {
-		str += " data=" + strings.ToUpper(hex.EncodeToString(this.Data_))
+		str += " data=" + fmt.Sprint(this.Data_)
 	}
 	return str + ">"
 }

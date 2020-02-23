@@ -1,6 +1,7 @@
 package mosquitto
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"sync"
@@ -170,7 +171,12 @@ func (this *mosquitto) Connect(flags iface.Flags) error {
 	}
 	if flags&iface.MOSQ_FLAG_EVENT_MESSAGE == iface.MOSQ_FLAG_EVENT_MESSAGE {
 		this.client.SetMessageCallback(func(userInfo uintptr, message *mosq.Message) {
-			this.bus.Emit(NewMessage(this, message.Id(), message.Topic(), message.Data()))
+			// We make a copy of the data
+			// as this is invalidated after the callback ends
+			data := make([]byte, len(message.Data()))
+			copy(data, message.Data())
+			// Emit
+			this.bus.Emit(NewMessage(this, message.Id(), message.Topic(), data))
 		})
 	} else {
 		this.client.SetMessageCallback(nil)
@@ -246,13 +252,29 @@ func (this *mosquitto) String() string {
 ////////////////////////////////////////////////////////////////////////////////
 // SUBSCRIBE, UNSUBSCRIBE AND PUBLISH
 
-func (this *mosquitto) Subscribe(topics string, qos int) (int, error) {
+func (this *mosquitto) Subscribe(topics string, opts ...iface.Opt) (int, error) {
 	this.Mutex.Lock()
 	defer this.Mutex.Unlock()
 
+	// Check for connection
 	if this.connected == false {
 		return 0, gopi.ErrOutOfOrder
-	} else if id, err := this.client.Subscribe(topics, qos); err != nil {
+	}
+
+	// Process options
+	qos := int(1)
+	for _, opt := range opts {
+		switch opt.Type {
+		case iface.MOSQ_OPTION_QOS:
+			qos = opt.Int
+		default:
+			return 0, gopi.ErrBadParameter.WithPrefix(fmt.Sprint(opt.Type))
+		}
+
+	}
+
+	// Perform the subscribe
+	if id, err := this.client.Subscribe(topics, qos); err != nil {
 		return 0, err
 	} else {
 		return id, nil
@@ -272,15 +294,42 @@ func (this *mosquitto) Unsubscribe(topics string) (int, error) {
 	}
 }
 
-func (this *mosquitto) Publish(topic string, data []byte, qos int, retain bool) (int, error) {
+func (this *mosquitto) Publish(topic string, data []byte, opts ...iface.Opt) (int, error) {
 	this.Mutex.Lock()
 	defer this.Mutex.Unlock()
 
+	// Check for connection
 	if this.connected == false {
 		return 0, gopi.ErrOutOfOrder
-	} else if id, err := this.client.Publish(topic, data, qos, retain); err != nil {
+	}
+
+	// Process options
+	qos := int(1)
+	retain := false
+	for _, opt := range opts {
+		switch opt.Type {
+		case iface.MOSQ_OPTION_QOS:
+			qos = opt.Int
+		case iface.MOSQ_OPTION_RETAIN:
+			retain = opt.Bool
+		default:
+			return 0, gopi.ErrBadParameter.WithPrefix(fmt.Sprint(opt.Type))
+		}
+
+	}
+
+	// Perform the publish
+	if id, err := this.client.Publish(topic, data, qos, retain); err != nil {
 		return 0, err
 	} else {
 		return id, nil
 	}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// WAIT FOR
+
+// Wait for a specific request-id and return the event
+func (this *mosquitto) WaitFor(context.Context, int) (iface.Event, error) {
+	return nil, gopi.ErrNotImplemented
 }

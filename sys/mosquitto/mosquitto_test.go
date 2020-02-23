@@ -64,8 +64,8 @@ func Test_Mosquitto_004(t *testing.T) {
 		defer mosquitto.Cleanup()
 		if client, err := mosquitto.New("id", true, 0); err != nil {
 			t.Error(err)
-		} else if err := client.SetConnectCallback(func(userInfo uintptr, rc, flags int) {
-			t.Log("onConnect", userInfo, rc, flags)
+		} else if err := client.SetConnectCallback(func(userInfo uintptr, rc int) {
+			t.Log("onConnect", userInfo, rc)
 		}); err != nil {
 			t.Error(err)
 		} else if err := client.SetDisconnectCallback(func(userInfo uintptr, rc int) {
@@ -114,8 +114,8 @@ func Test_Mosquitto_006(t *testing.T) {
 		defer mosquitto.Cleanup()
 		if client, err := mosquitto.New("id", true, 0); err != nil {
 			t.Error(err)
-		} else if err := client.SetConnectCallback(func(userInfo uintptr, rc, flags int) {
-			t.Log("onConnect", userInfo, rc, flags)
+		} else if err := client.SetConnectCallback(func(userInfo uintptr, rc int) {
+			t.Log("onConnect", userInfo, rc)
 		}); err != nil {
 			t.Error(err)
 		} else if err := client.SetDisconnectCallback(func(userInfo uintptr, rc int) {
@@ -165,8 +165,8 @@ func Test_Mosquitto_007(t *testing.T) {
 		defer mosquitto.Cleanup()
 		if client, err := mosquitto.New("id", true, 0); err != nil {
 			t.Error(err)
-		} else if err := client.SetConnectCallback(func(userInfo uintptr, rc, flags int) {
-			t.Log("onConnect", userInfo, rc, flags)
+		} else if err := client.SetConnectCallback(func(userInfo uintptr, rc int) {
+			t.Log("onConnect", userInfo, rc)
 		}); err != nil {
 			t.Error(err)
 		} else if err := client.SetDisconnectCallback(func(userInfo uintptr, rc int) {

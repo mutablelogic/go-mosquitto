@@ -1,36 +1,43 @@
 package mosquitto
 
 import (
-	// Frameworks
+	"context"
 	"strings"
 
+	// Frameworks
 	"github.com/djthorpe/gopi/v2"
 )
 
 ////////////////////////////////////////////////////////////////////////////////
 // TYPES
 
-type Flags uint
+type (
+	Flags  uint
+	Option uint
+)
 
 ////////////////////////////////////////////////////////////////////////////////
 // INTERFACES
 
 // Client implements an MQTT client
 type Client interface {
-	// Connect to MQTT broker
+	// Connect to MQTT broker with event flags
 	Connect(Flags) error
 
 	// Disconnect from MQTT broker
 	Disconnect() error
 
-	// Subscribe
-	Subscribe(topics string, qos int) (int, error)
+	// Subscribe to topic with wildcard and return request-id
+	Subscribe(string, ...Opt) (int, error)
 
-	// Unsubscribe
-	Unsubscribe(topics string) (int, error)
+	// Unsubscribe from topic with wildcard and return request-id
+	Unsubscribe(string) (int, error)
 
-	// Publish
-	Publish(topic string, data []byte, qos int, retain bool) (int, error)
+	// Publish []byte data to topic and return request-id
+	Publish(string, []byte, ...Opt) (int, error)
+
+	// Wait for a specific request-id
+	WaitFor(context.Context, int) (Event, error)
 
 	// Implements gopi.Unit
 	gopi.Unit
@@ -50,6 +57,19 @@ type Event interface {
 	gopi.Event
 }
 
+// Function options
+type Opt struct {
+	Type Option
+	Int  int
+	Bool bool
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// MQTT Options
+
+func OptQOS(value int) Opt     { return Opt{Type: MOSQ_OPTION_QOS, Int: value} }
+func OptRetain(value bool) Opt { return Opt{Type: MOSQ_OPTION_RETAIN, Bool: value} }
+
 ////////////////////////////////////////////////////////////////////////////////
 // CONSTANTS
 
@@ -65,6 +85,12 @@ const (
 	MOSQ_FLAG_EVENT_ALL        = MOSQ_FLAG_EVENT_CONNECT | MOSQ_FLAG_EVENT_DISCONNECT | MOSQ_FLAG_EVENT_SUBSCRIBE | MOSQ_FLAG_EVENT_UNSUBSCRIBE | MOSQ_FLAG_EVENT_PUBLISH | MOSQ_FLAG_EVENT_MESSAGE
 	MOSQ_FLAG_EVENT_MIN        = MOSQ_FLAG_EVENT_CONNECT
 	MOSQ_FLAG_EVENT_MAX        = MOSQ_FLAG_EVENT_LOG
+)
+
+const (
+	MOSQ_OPTION_NONE   Option = iota
+	MOSQ_OPTION_QOS           // IntValue
+	MOSQ_OPTION_RETAIN        // BoolValue
 )
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -103,5 +129,18 @@ func (f Flags) StringFlag() string {
 		return "MOSQ_FLAG_EVENT_LOG"
 	default:
 		return "[?? Invalid Flags value]"
+	}
+}
+
+func (o Option) String() string {
+	switch o {
+	case MOSQ_OPTION_NONE:
+		return "MOSQ_OPTION_NONE"
+	case MOSQ_OPTION_QOS:
+		return "MOSQ_OPTION_QOS"
+	case MOSQ_OPTION_RETAIN:
+		return "MOSQ_OPTION_RETAIN"
+	default:
+		return "[?? Invalid Option value]"
 	}
 }
