@@ -1,7 +1,6 @@
-# mosquitto
+# Mosquitto
 
-Golang Mosquitto client library, which conforms to the MQTT standard. This
-documentation includes the following information:
+This repository contains a Golang [mosquitto](https://mosquitto.org/) client library, which conforms to the MQTT standard. This documentation includes the following information:
 
   * What dependencies are needed in order to use this package
   * Information about the two command-line tools, `mqttpub` and `mqttsub`
@@ -10,6 +9,25 @@ documentation includes the following information:
 
 This repository is published under the Apache license. Please use the [issues](https://github.com/djthorpe/mosquitto/issues) tab on Github to file bugs, ask for features or
 for general discussion.
+
+## Copyright Notice
+
+> Copyright 2020 David Thorpe
+>
+>   Licensed under the Apache License, Version 2.0 (the "License");
+>   you may not use this file except in compliance with the License.
+>   You may obtain a copy of the License at
+>
+>   http://www.apache.org/licenses/LICENSE-2.0
+>
+>   Unless required by applicable law or agreed to in writing, software
+>   distributed under the License is distributed on an "AS IS" BASIS,
+>   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+>   See the License for the specific language governing permissions and
+>   limitations under the License.
+
+This repository requires you to install the mosquitto library, which is
+licensed under a separate license.
 
 ## Dependencies
 
@@ -61,7 +79,8 @@ bash# mqttpub -mqtt.broker test.mosquitto.org -topic test "Hello, World"
 
 ## Using the bindings
 
-You can use the following `libmosquitto` bindings in your code:
+You can use the following `libmosquitto` bindings in your code. For informaton
+about the C API, please see [here](https://mosquitto.org/api/files/mosquitto-h.html):
 
 ```go
 package mosquitto // import "github.com/djthorpe/mosquitto/sys/mosquitto"
