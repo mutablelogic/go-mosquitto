@@ -23,8 +23,8 @@ type (
 
 // Client implements an MQTT client
 type Client interface {
-	// Connect to MQTT broker with options
-	Connect(...Opt) error
+	// Connect to MQTT broker with hostname, port and options
+	Connect(string, uint, ...Opt) error
 
 	// Disconnect from MQTT broker
 	Disconnect() error

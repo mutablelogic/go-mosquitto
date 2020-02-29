@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -20,15 +22,61 @@ var (
 
 ////////////////////////////////////////////////////////////////////////////////
 
+const (
+	MOSQUITTO_SERVICE = "_mosquitto._tcp"
+)
+
+var (
+	reHostPort = regexp.MustCompile("^([^\\:]+)\\:(\\d+)$")
+)
+
+////////////////////////////////////////////////////////////////////////////////
+
+func DiscoverBroker(app gopi.App) (string, uint, error) {
+	discovery := app.UnitInstance("discovery").(gopi.RPCServiceDiscovery)
+	timeout := app.Flags().GetDuration("timeout", gopi.FLAG_NS_DEFAULT)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	if services, err := discovery.Lookup(ctx, MOSQUITTO_SERVICE); err != nil {
+		return "", 0, err
+	} else if len(services) == 0 {
+		return "", 0, gopi.ErrNotFound.WithPrefix(MOSQUITTO_SERVICE)
+	} else if len(services) > 1 {
+		return "", 0, gopi.ErrDuplicateItem.WithPrefix(MOSQUITTO_SERVICE)
+	} else {
+		return services[0].Host, uint(services[0].Port), nil
+	}
+}
+
+func GetHostPort(app gopi.App) (string, uint, error) {
+	hostport := app.Flags().GetString("broker", gopi.FLAG_NS_DEFAULT)
+	if hostport == "" {
+		return DiscoverBroker(app)
+	} else if reHostPort.MatchString(hostport) == false {
+		hostport = fmt.Sprintf("%v:%v", hostport, 0)
+	}
+	if host, port, err := net.SplitHostPort(hostport); err != nil {
+		return "", 0, gopi.ErrBadParameter.WithPrefix("-broker")
+	} else if port_, err := strconv.ParseUint(port, 10, 32); err != nil {
+		return "", 0, gopi.ErrBadParameter.WithPrefix("-broker")
+	} else {
+		return host, uint(port_), nil
+	}
+}
+
 func Main(app gopi.App, args []string) error {
+	client := app.UnitInstance("mosquitto").(mosquitto.Client)
+
 	// Check args
 	if len(args) == 0 {
 		return gopi.ErrHelp
 	}
 
-	// Connect client
-	client := app.UnitInstance("mosquitto").(mosquitto.Client)
-	if err := client.Connect(); err != nil {
+	// If there is no -broker flag then use discovery
+	if addr, port, err := GetHostPort(app); err != nil {
+		return err
+	} else if err := client.Connect(addr, port); err != nil {
 		return err
 	}
 

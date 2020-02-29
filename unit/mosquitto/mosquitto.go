@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -24,7 +22,6 @@ type Mosquitto struct {
 	ClientId string
 	User     string
 	Password string
-	Broker   string
 	Bus      gopi.Bus
 }
 
@@ -39,13 +36,6 @@ type mosquitto struct {
 	sync.Mutex
 	sync.WaitGroup
 }
-
-////////////////////////////////////////////////////////////////////////////////
-// GLOBALS
-
-var (
-	reHostPort = regexp.MustCompile("^([^\\:]+)\\:(\\d+)$")
-)
 
 ////////////////////////////////////////////////////////////////////////////////
 // IMPLEMENTATION gopi.Unit
@@ -83,22 +73,6 @@ func (this *mosquitto) Init(config Mosquitto) error {
 		this.client = client
 	}
 
-	// Add the port on the end if not added
-	if config.Broker == "" {
-		return gopi.ErrBadParameter.WithPrefix("-mqtt.broker")
-	} else if reHostPort.MatchString(config.Broker) == false {
-		config.Broker = fmt.Sprintf("%v:%v", config.Broker, mosq.MOSQ_DEFAULT_PORT)
-	}
-	// Check host and port
-	if host, port, err := net.SplitHostPort(config.Broker); err != nil {
-		return gopi.ErrBadParameter.WithPrefix("-mqtt.broker")
-	} else if port_, err := strconv.ParseUint(port, 10, 32); err != nil {
-		return gopi.ErrBadParameter.WithPrefix("-mqtt.broker")
-	} else {
-		this.host = host
-		this.port = uint(port_)
-	}
-
 	// Set credentials
 	if config.User != "" {
 		if err := this.client.SetCredentials(config.User, config.Password); err != nil {
@@ -132,7 +106,7 @@ func (this *mosquitto) Close() error {
 ////////////////////////////////////////////////////////////////////////////////
 // CONNECT AND DISCONNECT
 
-func (this *mosquitto) Connect(opts ...iface.Opt) error {
+func (this *mosquitto) Connect(host string, port uint, opts ...iface.Opt) error {
 	this.Mutex.Lock()
 	defer this.Mutex.Unlock()
 
@@ -215,10 +189,12 @@ func (this *mosquitto) Connect(opts ...iface.Opt) error {
 	// Perform connection, start loop
 	if err := this.client.LoopStart(); err != nil {
 		return err
-	} else if err := this.client.Connect(this.host, int(this.port), keepalive_secs, false); err != nil {
+	} else if err := this.client.Connect(host, int(port), keepalive_secs, false); err != nil {
 		this.client.LoopStop(true)
 		return err
 	} else {
+		this.host = host
+		this.port = port
 		this.connected = true
 	}
 
