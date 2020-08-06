@@ -47,7 +47,7 @@ func Test_Mosquitto_003(t *testing.T) {
 		defer mosquitto.Cleanup()
 		if client, err := mosquitto.New("id", true, 0); err != nil {
 			t.Error(err)
-		} else if err := client.Connect(TEST_SERVER, TEST_PORT_PLAINTEXT, 1, false); err != nil {
+		} else if err := client.Connect(TEST_SERVER, TEST_PORT_PLAINTEXT, 5, false); err != nil {
 			t.Error(err)
 		} else if err := client.Disconnect(); err != nil {
 			t.Error(err)
@@ -80,7 +80,7 @@ func Test_Mosquitto_004(t *testing.T) {
 					t.Log("Loop ended")
 				}
 			}()
-			if err := client.Connect(TEST_SERVER, TEST_PORT_PLAINTEXT, 1, false); err != nil {
+			if err := client.Connect(TEST_SERVER, TEST_PORT_PLAINTEXT, 5, false); err != nil {
 				t.Error(err)
 			} else {
 				time.Sleep(time.Second * 5)
