@@ -169,6 +169,18 @@ func Version() (int, int, int) {
 
 // Init initiaizes the library
 func Init() error {
+	if callbacks == nil {
+		callbacks = make(map[*C.struct_mosquitto]struct {
+			ConnectCallback
+			DisconnectCallback
+			SubscribeCallback
+			UnsubscribeCallback
+			PublishCallback
+			MessageCallback
+			LogCallback
+		})
+	}
+
 	if err := Error(C.mosquitto_lib_init()); err != MOSQ_ERR_SUCCESS {
 		return err
 	} else {
