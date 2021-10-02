@@ -2,6 +2,7 @@ package mosquitto
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"runtime"
 	"sync"
@@ -183,7 +184,7 @@ func NewWithConfig(ctx context.Context, cfg Config) (*Client, error) {
 	}
 }
 
-func (c *Client) Close(ctx context.Context) error {
+func (c *Client) Close() error {
 	var result error
 
 	c.disconnect = true
@@ -214,17 +215,20 @@ func (c *Client) Version() string {
 func (c *Client) String() string {
 	str := "<client"
 	str += fmt.Sprintf(" version=%q", c.Version())
-	//	str += fmt.Sprintf(" broker=%v:v", c.host, c.port)
-	//	str += fmt.Sprintf(" connected=%v", c.connected)
 	return str + ">"
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 // PUBLIC METHODS
 
-func (c *Client) Subscribe(topics string, qos int) (int, error) {
+func (c *Client) Subscribe(topics string, opts ...ClientOpt) (int, error) {
+	// Apply options
+	v := defaultOpts
+	for _, opt := range opts {
+		opt(&v)
+	}
 	// Perform the subscribe
-	if id, err := c.client.Subscribe(topics, qos); err != nil {
+	if id, err := c.client.Subscribe(topics, v.qos); err != nil {
 		return 0, err
 	} else {
 		return id, nil
@@ -239,29 +243,14 @@ func (c *Client) Unsubscribe(topics string) (int, error) {
 	}
 }
 
-/*
-func (c *Client) Publish(topic string, data []byte, opts ...Opt) (int, error) {
-	// Check for connection
-	if c.connected == false {
-		return 0, ErrOutOfOrder.With("Publish")
-	}
-
-	// Process options
-	qos := int(1)
-	retain := false
+func (c *Client) Publish(topic string, data []byte, opts ...ClientOpt) (int, error) {
+	// Apply options
+	v := defaultOpts
 	for _, opt := range opts {
-		switch opt.Type {
-		case MOSQ_OPTION_QOS:
-			qos = opt.Int
-		case MOSQ_OPTION_RETAIN:
-			retain = opt.Bool
-		default:
-			return 0, ErrBadParameter.With(opt.Type)
-		}
+		opt(&v)
 	}
-
-	// Perform the publish
-	if id, err := c.client.Publish(topic, data, qos, retain); err != nil {
+	// Send message
+	if id, err := c.client.Publish(topic, data, v.qos, v.retain); err != nil {
 		return 0, err
 	} else {
 		return id, nil
@@ -271,14 +260,15 @@ func (c *Client) Publish(topic string, data []byte, opts ...Opt) (int, error) {
 ////////////////////////////////////////////////////////////////////////////////
 // PUBLISH JSON & INFLUX FORMATS
 
-func (this *Client) PublishJSON(topic string, data interface{}, opts ...Opt) (int, error) {
+func (c *Client) PublishJSON(topic string, data interface{}, opts ...ClientOpt) (int, error) {
 	if json, err := json.Marshal(data); err != nil {
 		return 0, err
 	} else {
-		return this.Publish(topic, json, opts...)
+		return c.Publish(topic, json, opts...)
 	}
 }
 
+/*
 // Influx line protocol
 // https://docs.influxdata.com/influxdb/v1.7/write_protocols/line_protocol_tutorial/
 // Include one or more OptTag(name,value) for tags

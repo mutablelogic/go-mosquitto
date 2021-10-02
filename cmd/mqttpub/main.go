@@ -30,7 +30,7 @@ var (
 
 func main() {
 	flag.Usage = func() {
-		fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s <flags> [topic] [topic]...\n", filepath.Base(os.Args[0]))
+		fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s <flags> [topic] [data]...\n", filepath.Base(os.Args[0]))
 		fmt.Fprintln(flag.CommandLine.Output(), "\nFlags:")
 		flag.PrintDefaults()
 	}
@@ -42,10 +42,10 @@ func main() {
 		os.Exit(0)
 	}
 
-	// Topics to subscribe to
-	topics := flag.Args()
-	if len(topics) == 0 {
-		topics = []string{"#"}
+	// Check for less than one argument
+	if flag.NArg() < 1 {
+		flag.Usage()
+		os.Exit(0)
 	}
 
 	// Create a context which cancels on CTRL+C
@@ -61,8 +61,19 @@ func main() {
 		os.Exit(-1)
 	}
 
+	// Publish messages
+	if flag.NArg() > 1 {
+		topic := flag.Arg(0)
+		for _, data := range flag.Args()[1:] {
+			if err := app.Publish(topic, data); err != nil {
+				fmt.Fprintln(os.Stderr, err)
+			}
+		}
+	}
+
+	// Wait for messages
 	fmt.Println("Press CTRL+C to end")
-	if err := app.Run(ctx, topics...); err != nil {
+	if err := app.Run(ctx); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(-1)
 	}

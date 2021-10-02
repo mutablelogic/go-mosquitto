@@ -58,7 +58,7 @@ func NewPublish(id int) *Event {
 
 func NewMessage(id int, topic string, data []byte) *Event {
 	return &Event{
-		Type:  MOSQ_FLAG_EVENT_PUBLISH,
+		Type:  MOSQ_FLAG_EVENT_MESSAGE,
 		Id:    id,
 		Topic: topic,
 		Data:  data[:],

@@ -27,7 +27,7 @@ func Test_Mosquitto_001(t *testing.T) {
 	t.Log(client)
 	<-ctx.Done()
 
-	if err := client.Close(context.Background()); err != nil {
+	if err := client.Close(); err != nil {
 		t.Error(err)
 	}
 }
@@ -43,9 +43,9 @@ func Test_Mosquitto_002(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer client.Close(context.Background())
+	defer client.Close()
 
-	if _, err := client.Subscribe("$SYS/#", 0); err != nil {
+	if _, err := client.Subscribe("$SYS/#"); err != nil {
 		t.Error(err)
 	}
 
