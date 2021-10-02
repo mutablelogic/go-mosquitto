@@ -20,7 +20,7 @@ import (
 
 var (
 	flagHost    = flag.String("host", "test.mosquitto.org", "MQTT broker host")
-	flagQos     = flag.Int("qos", 1, "MQTT QoS")
+	flagQos     = flag.Int("qos", 0, "MQTT QoS")
 	flagVersion = flag.Bool("version", false, "Print version")
 	flagTimeout = flag.Duration("timeout", 10*time.Second, "Connection Timeout")
 )

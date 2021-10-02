@@ -219,12 +219,15 @@ func (this *Client) Unsubscribe(topics string) (int, error) {
 
 // Publish a message to the broker in a topic and return the id of the request
 func (this *Client) Publish(topic string, data []byte, qos int, retain bool) (int, error) {
-	var messageId C.int
+	var messageId, sz C.int
+	var payload unsafe.Pointer
 	cTopic := C.CString(topic)
 	defer C.free(unsafe.Pointer(cTopic))
-	payloadlen := len(data)
-	payload := unsafe.Pointer(&data[0])
-	if err := Error(C.mosquitto_publish((*C.struct_mosquitto)(this), &messageId, cTopic, C.int(payloadlen), unsafe.Pointer(payload), C.int(qos), C.bool(retain))); err != MOSQ_ERR_SUCCESS {
+	if len(data) > 0 {
+		sz = C.int(len(data))
+		payload = unsafe.Pointer(&data[0])
+	}
+	if err := Error(C.mosquitto_publish((*C.struct_mosquitto)(this), &messageId, cTopic, sz, payload, C.int(qos), C.bool(retain))); err != MOSQ_ERR_SUCCESS {
 		return 0, err
 	} else {
 		return int(messageId), nil

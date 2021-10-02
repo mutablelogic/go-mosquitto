@@ -1,0 +1,27 @@
+# This is the configuration for a mqtt server which
+# stores the data in an sqlite database and makes it available via
+# a REST API. In order to build, run 'make server' and the server
+# binary and required plugins are stored in the 'build' directory.
+plugins:
+  - build/env.plugin
+  - build/mqtt.plugin
+
+mqtt:
+  # Broker to connect to. You can use host:port version to use different port
+  broker: test.mosquitto.org
+  # Connection timeout (optional)
+  timeout: 30s
+  # KeepAlive delta (optional)
+  keepalive: 60s 
+  # Broker credentials
+  user:
+  password:
+  # TLS credentials. Authority can be a single file or
+  # a directory containing certificates.
+  certauth:
+  cert:
+  key:
+  insecure: false
+  # Topics to subscribe to
+  topics:
+    - "vscp/#"

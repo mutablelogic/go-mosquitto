@@ -15,7 +15,7 @@ type ClientOpt func(opts *opts)
 
 var (
 	defaultOpts = opts{
-		qos:    1,
+		qos:    0,
 		retain: false,
 	}
 )

@@ -1,12 +1,14 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"flag"
 	"fmt"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -20,7 +22,7 @@ import (
 
 var (
 	flagHost    = flag.String("host", "test.mosquitto.org", "MQTT broker host")
-	flagQos     = flag.Int("qos", 1, "MQTT QoS")
+	flagQos     = flag.Int("qos", 0, "MQTT QoS")
 	flagVersion = flag.Bool("version", false, "Print version")
 	flagTimeout = flag.Duration("timeout", 10*time.Second, "Connection Timeout")
 )
@@ -62,18 +64,29 @@ func main() {
 	}
 
 	// Publish messages
+	topic := flag.Arg(0)
 	if flag.NArg() > 1 {
-		topic := flag.Arg(0)
 		for _, data := range flag.Args()[1:] {
 			if err := app.Publish(topic, data); err != nil {
 				fmt.Fprintln(os.Stderr, err)
 			}
 		}
+	} else {
+		fmt.Printf("Reading messages from stdin, press CTRL+C to exit\n")
+		bufio := bufio.NewReader(os.Stdin)
+		for {
+			line, err := bufio.ReadString('\n')
+			if err != nil {
+				break
+			}
+			line = strings.TrimSpace(line)
+			if err := app.Publish(topic, line); err != nil {
+				fmt.Fprintln(os.Stderr, err)
+			}
+		}
 	}
 
-	// Wait for messages
-	fmt.Println("Press CTRL+C to end")
-	if err := app.Run(ctx); err != nil {
+	if err := app.Close(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(-1)
 	}

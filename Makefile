@@ -15,13 +15,25 @@ BUILD_LD_FLAGS += -X $(BUILD_MODULE)/pkg/config.GitHash=$(shell git rev-parse HE
 BUILD_LD_FLAGS += -X $(BUILD_MODULE)/pkg/config.GoBuildTime=$(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
 BUILD_FLAGS = -ldflags "-s -w $(BUILD_LD_FLAGS)" 
 
-all: clean test cmd
+all: clean test cmd server
 
 cmd: dependencies mkdir $(CMD_DIR)
 
 $(CMD_DIR): FORCE
 	@echo Build cmd $(notdir $@)
 	@${GO} build -o ${BUILD_DIR}/$(notdir $@) ${BUILD_FLAGS} ./$@
+
+plugins: $(PLUGIN_DIR)
+	@echo Build env
+	@${GO} build -buildmode=plugin -o ${BUILD_DIR}/env.plugin ${BUILD_FLAGS} github.com/mutablelogic/go-server/plugin/env
+
+server: plugins
+	@echo Build server
+	@${GO} build -o ${BUILD_DIR}/server ${BUILD_FLAGS} github.com/mutablelogic/go-server/cmd/server
+
+$(PLUGIN_DIR): FORCE
+	@echo Build plugin $(notdir $@)
+	@${GO} build -buildmode=plugin -o ${BUILD_DIR}/$(notdir $@).plugin ${BUILD_FLAGS} ./$@
 
 FORCE:
 
