@@ -11,8 +11,8 @@ import (
 	"sync"
 
 	// Frameworks
+	mosquitto "github.com/djthorpe/go-mosquitto"
 	gopi "github.com/djthorpe/gopi/v2"
-	mosquitto "github.com/djthorpe/mosquitto"
 )
 
 var (

@@ -1,13 +1,10 @@
 package mosquitto
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"time"
-
 	// Frameworks
-	"github.com/djthorpe/gopi/v2"
 )
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -22,52 +19,31 @@ type (
 // INTERFACES
 
 // Client implements an MQTT client
-type Client interface {
+type MQClient interface {
 	// Connect to MQTT broker with hostname, port and options
-	Connect(string, uint, ...Opt) error
+	Connect(string, uint, ...MQOpt) error
 
 	// Disconnect from MQTT broker
 	Disconnect() error
 
 	// Subscribe to topic with wildcard and return request-id
-	Subscribe(string, ...Opt) (int, error)
+	Subscribe(string, ...MQOpt) (int, error)
 
 	// Unsubscribe from topic with wildcard and return request-id
 	Unsubscribe(string) (int, error)
 
 	// Publish []byte data to topic and return request-id
-	Publish(string, []byte, ...Opt) (int, error)
+	Publish(string, []byte, ...MQOpt) (int, error)
 
 	// Publish JSON data to topic and return request-id
-	PublishJSON(string, interface{}, ...Opt) (int, error)
+	PublishJSON(string, interface{}, ...MQOpt) (int, error)
 
 	// Publish measurements in influxdata line protocol format and return request-id
-	PublishInflux(string, string, map[string]interface{}, ...Opt) (int, error)
-
-	// Wait for a specific request-id or 0 for a connect or disconnect event
-	// with context (for timeout)
-	WaitFor(context.Context, int) (Event, error)
-
-	// Implements gopi.Unit
-	gopi.Unit
-}
-
-// Event implements an MQTT event
-type Event interface {
-	ReturnCode() int // For CONNECT and DISCONNECT
-
-	// Message information
-	Id() int
-	Type() Flags
-	Topic() string
-	Data() []byte
-
-	// Implements gopi.Event
-	gopi.Event
+	PublishInflux(string, string, map[string]interface{}, ...MQOpt) (int, error)
 }
 
 // Function options
-type Opt struct {
+type MQOpt struct {
 	Type      Option
 	Int       int
 	Bool      bool
@@ -75,18 +51,6 @@ type Opt struct {
 	String    string
 	Timestamp time.Time
 }
-
-////////////////////////////////////////////////////////////////////////////////
-// MQTT Options
-
-func OptQOS(value int) Opt           { return Opt{Type: MOSQ_OPTION_QOS, Int: value} }
-func OptRetain(value bool) Opt       { return Opt{Type: MOSQ_OPTION_RETAIN, Bool: value} }
-func OptFlags(value Flags) Opt       { return Opt{Type: MOSQ_OPTION_FLAGS, Flags: value} }
-func OptKeepaliveSecs(value int) Opt { return Opt{Type: MOSQ_OPTION_KEEPALIVE, Int: value} }
-func OptTag(name, value string) Opt {
-	return Opt{Type: MOSQ_OPTION_TAG, String: fmt.Sprintf("%s=%s", strings.TrimSpace(name), strings.TrimSpace(value))}
-}
-func OptTimestamp(value time.Time) Opt { return Opt{Type: MOSQ_OPTION_TIMESTAMP, Timestamp: value} }
 
 ////////////////////////////////////////////////////////////////////////////////
 // CONSTANTS
@@ -104,6 +68,18 @@ const (
 	MOSQ_FLAG_EVENT_MIN        = MOSQ_FLAG_EVENT_CONNECT
 	MOSQ_FLAG_EVENT_MAX        = MOSQ_FLAG_EVENT_LOG
 )
+
+////////////////////////////////////////////////////////////////////////////////
+// MQTT Options
+
+func OptQOS(value int) MQOpt           { return MQOpt{Type: MOSQ_OPTION_QOS, Int: value} }
+func OptRetain(value bool) MQOpt       { return MQOpt{Type: MOSQ_OPTION_RETAIN, Bool: value} }
+func OptFlags(value Flags) MQOpt       { return MQOpt{Type: MOSQ_OPTION_FLAGS, Flags: value} }
+func OptKeepaliveSecs(value int) MQOpt { return MQOpt{Type: MOSQ_OPTION_KEEPALIVE, Int: value} }
+func OptTag(name, value string) MQOpt {
+	return MQOpt{Type: MOSQ_OPTION_TAG, String: fmt.Sprintf("%s=%s", strings.TrimSpace(name), strings.TrimSpace(value))}
+}
+func OptTimestamp(value time.Time) MQOpt { return MQOpt{Type: MOSQ_OPTION_TIMESTAMP, Timestamp: value} }
 
 const (
 	MOSQ_OPTION_NONE      Option = iota

@@ -1,8 +1,9 @@
-module github.com/djthorpe/mosquitto
+module github.com/djthorpe/go-mosquitto
 
 go 1.13
 
 require (
 	github.com/djthorpe/gopi/v2 v2.0.20
-	github.com/djthorpe/mutablehome v0.0.0-20200120102640-e7d460bc5b89 // indirect
+	github.com/djthorpe/mosquitto v1.0.2
+	github.com/hashicorp/go-multierror v1.1.1
 )
