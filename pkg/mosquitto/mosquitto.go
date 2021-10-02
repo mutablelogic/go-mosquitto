@@ -21,8 +21,9 @@ import (
 
 type Client struct {
 	sync.WaitGroup
-	client *mosq.ClientEx
-	ch     chan *Event
+	client     *mosq.ClientEx
+	ch         chan *Event
+	disconnect bool
 }
 
 type EventFunc func(*Event)
@@ -160,7 +161,7 @@ func NewWithConfig(ctx context.Context, cfg Config) (*Client, error) {
 	c.WaitGroup.Add(1)
 	go func(delta time.Duration) {
 		defer c.WaitGroup.Done()
-		for {
+		for !c.disconnect {
 			if err := c.client.Loop(int(delta.Milliseconds())); err != nil {
 				break
 			}
@@ -185,23 +186,9 @@ func NewWithConfig(ctx context.Context, cfg Config) (*Client, error) {
 func (c *Client) Close(ctx context.Context) error {
 	var result error
 
-	// Perform disconnect
+	c.disconnect = true
 	if err := c.client.Disconnect(); err != nil {
 		result = multierror.Append(result, err)
-	}
-
-	// Wait for disconnection, cancel, or some other unknown issue
-	select {
-	case <-ctx.Done():
-		break
-	case evt := <-c.ch:
-		if evt.Type == MOSQ_FLAG_EVENT_DISCONNECT && evt.Err == nil {
-			break
-		} else if evt.Err != nil {
-			result = multierror.Append(result, evt.Err)
-		} else {
-			result = multierror.Append(result, ErrOutOfOrder.With(evt.Type))
-		}
 	}
 
 	// Wait for loop to be completed
