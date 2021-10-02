@@ -11,27 +11,27 @@ import (
 // TYPES
 
 type Event struct {
-	Type       Flags
-	ReturnCode int
-	Id         int
-	Topic      string
-	Data       []byte
+	Type  Flags
+	Err   error
+	Id    int
+	Topic string
+	Data  []byte
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 // NEW MESSAGES
 
-func NewConnect(returnCode int) *Event {
+func NewConnect(err error) *Event {
 	return &Event{
-		Type:       MOSQ_FLAG_EVENT_CONNECT,
-		ReturnCode: returnCode,
+		Type: MOSQ_FLAG_EVENT_CONNECT,
+		Err:  err,
 	}
 }
 
-func NewDisconnect(returnCode int) *Event {
+func NewDisconnect(err error) *Event {
 	return &Event{
-		Type:       MOSQ_FLAG_EVENT_DISCONNECT,
-		ReturnCode: returnCode,
+		Type: MOSQ_FLAG_EVENT_DISCONNECT,
+		Err:  err,
 	}
 }
 
@@ -71,7 +71,19 @@ func NewMessage(id int, topic string, data []byte) *Event {
 func (e *Event) String() string {
 	str := "<event"
 	if t := e.Type; t != 0 {
-		str += fmt.Sprint(" type=", t)
+		str += fmt.Sprint(" ", t)
+	}
+	if err := e.Err; err != nil {
+		str += fmt.Sprintf(" err=%q", err)
+	}
+	if id := e.Id; id != 0 {
+		str += fmt.Sprint(" id=", id)
+	}
+	if topic := e.Topic; topic != "" {
+		str += fmt.Sprintf(" topic=%q", topic)
+	}
+	if data := e.Data; len(data) > 0 {
+		str += fmt.Sprintf(" data=%q", string(data))
 	}
 	return str + ">"
 }

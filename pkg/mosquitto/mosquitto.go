@@ -1,117 +1,71 @@
 package mosquitto
 
 import (
+	"context"
 	"fmt"
-	"net"
-	"strconv"
+	"runtime"
 	"sync"
 	"time"
 
 	// Packages
-	mosq "github.com/djthorpe/mosquitto/sys/mosquitto"
+	mosq "github.com/djthorpe/go-mosquitto/sys/mosquitto"
 	multierror "github.com/hashicorp/go-multierror"
+
 	// Namespace imports
-	//. "github.com/djthorpe/go-errors"
-	//. "github.com/djthorpe/go-mosquitto"
+	. "github.com/djthorpe/go-errors"
+	. "github.com/djthorpe/go-mosquitto"
 )
 
 ////////////////////////////////////////////////////////////////////////////////
 // TYPES
 
-type EventFunc func(*Event)
-
-type Config struct {
-	clientId  string
-	user      string
-	password  string
-	host      string
-	port      uint
-	keepalive time.Duration
-	fn        EventFunc
-}
-
 type Client struct {
-	client *mosq.Client
+	sync.WaitGroup
+	client *mosq.ClientEx
+	ch     chan *Event
 }
+
+type EventFunc func(*Event)
+type TraceFunc func(string)
 
 ////////////////////////////////////////////////////////////////////////////////
 // GLOBALS
 
 var (
-	defaultConfig = Config{
-		clientId:  "",
-		port:      1883,
-		keepalive: 60 * time.Second,
-	}
-	once sync.Once
+	once = new(sync.Once)
 )
-
-////////////////////////////////////////////////////////////////////////////////
-// CONFIGURATION OPTIONS
-
-// Create a new empty configuration
-func NewConfigWithBroker(host string) Config {
-	return defaultConfig.WithHost(host)
-}
-
-func (c Config) WithClientId(v string) Config {
-	c.clientId = v
-	return c
-}
-
-func (c Config) WithCredentials(user, password string) Config {
-	c.user = user
-	c.password = password
-	return c
-}
-
-func (c Config) WithHost(v string) Config {
-	// Try host:port version first
-	if host, port, err := net.SplitHostPort(v); err == nil {
-		if port, err := strconv.ParseUint(port, 0, 16); err == nil {
-			c.host = host
-			c.port = uint(port)
-			return c
-		}
-	}
-	// fallback to interpreting as host only
-	c.host = v
-
-	// return config
-	return c
-}
-
-func (c Config) WithKeepalive(d time.Duration) Config {
-	c.keepalive = d
-	return c
-}
-
-func (c Config) WithCallback(fn EventFunc) Config {
-	c.fn = fn
-	return c
-}
 
 ////////////////////////////////////////////////////////////////////////////////
 // LIFECYCLE
 
-func NewWithConfig(cfg Config) (*Client, error) {
+// New client connection to a broker, which will callback on events
+func New(ctx context.Context, host string, callback EventFunc) (*Client, error) {
+	return NewWithConfig(ctx, defaultConfig.WithHost(host).WithCallback(callback))
+}
+
+// New client connection with additional configuration
+func NewWithConfig(ctx context.Context, cfg Config) (*Client, error) {
 	c := new(Client)
 
-	// Initialize
+	// Initialize once
 	var result error
 	once.Do(func() {
 		if err := mosq.Init(); err != nil {
 			result = multierror.Append(result, err)
 		}
+		runtime.SetFinalizer(&once, func() {
+			mosq.Cleanup()
+		})
 	})
 
 	// Create a new client
 	if result != nil {
 		return nil, result
-	} else if client, err := mosq.New(cfg.clientId, true, 0); err != nil {
+	} else if client, err := mosq.NewEx(cfg.clientId, true); err != nil {
 		return nil, err
 	} else {
 		c.client = client
+		c.ch = make(chan *Event)
 	}
 
 	// Set credentials
@@ -122,18 +76,63 @@ func NewWithConfig(cfg Config) (*Client, error) {
 		}
 	}
 
-	// Set callback
+	// Set TLS
+	if cfg.capath != "" {
+		if err := c.client.SetTLS(cfg.capath, cfg.certpath, cfg.keypath); err != nil {
+			c.client.Destroy()
+			return nil, err
+		}
+		if err := c.client.SetTLSInsecure(!cfg.certverify); err != nil {
+			c.client.Destroy()
+			return nil, err
+		}
+		if cfg.port == 0 {
+			cfg.port = mosq.MOSQ_DEFAULT_SECURE_PORT
+		}
+	} else {
+		if cfg.port == 0 {
+			cfg.port = mosq.MOSQ_DEFAULT_PORT
+		}
+	}
+
+	// Always set connect and disconnect callbacks
+	c.client.SetConnectCallback(func(err mosq.Error) {
+		err_ := toError(err)
+		select {
+		case c.ch <- NewConnect(err_):
+			break
+		default:
+			break
+		}
+		if cfg.fn != nil {
+			cfg.fn(NewConnect(err_))
+		}
+	})
+	c.client.SetDisconnectCallback(func(err mosq.Error) {
+		err_ := toError(err)
+		select {
+		case c.ch <- NewDisconnect(err_):
+			break
+		default:
+			break
+		}
+		if cfg.fn != nil {
+			cfg.fn(NewDisconnect(err_))
+		}
+	})
+
+	// Set event callbacks
 	if cfg.fn != nil {
-		c.client.SetSubscribeCallback(func(userInfo uintptr, id int, qos []int) {
+		c.client.SetSubscribeCallback(func(id int, qos []int) {
 			cfg.fn(NewSubscribe(id))
 		})
-		c.client.SetUnsubscribeCallback(func(userInfo uintptr, id int) {
+		c.client.SetUnsubscribeCallback(func(id int) {
 			cfg.fn(NewUnsubscribe(id))
 		})
-		c.client.SetPublishCallback(func(userInfo uintptr, id int) {
+		c.client.SetPublishCallback(func(id int) {
 			cfg.fn(NewPublish(id))
 		})
-		c.client.SetMessageCallback(func(userInfo uintptr, message *mosq.Message) {
+		c.client.SetMessageCallback(func(message *mosq.Message) {
 			// We make a copy of the data
 			// as this is invalidated after the callback ends
 			data := make([]byte, len(message.Data()))
@@ -143,129 +142,79 @@ func NewWithConfig(cfg Config) (*Client, error) {
 		})
 	}
 
+	// Set trace callback
+	if cfg.trace != nil {
+		c.client.SetLogCallback(func(level mosq.Level, message string) {
+			cfg.trace(message)
+		})
+	}
+
 	// Perform connection, start loop
-	if err := c.client.LoopStart(); err != nil {
-		c.client.Destroy()
-		return nil, err
-	} else if err := c.client.Connect(cfg.host, int(cfg.port), int(cfg.keepalive.Seconds()), false); err != nil {
+	if err := c.client.Connect(cfg.host, int(cfg.port), int(cfg.keepalive.Seconds()), false); err != nil {
 		c.client.LoopStop(true)
 		c.client.Destroy()
 		return nil, err
 	}
 
-	// Return success
-	return c, nil
+	// Run the loop in the background
+	c.WaitGroup.Add(1)
+	go func(delta time.Duration) {
+		defer c.WaitGroup.Done()
+		for {
+			if err := c.client.Loop(int(delta.Milliseconds())); err != nil {
+				break
+			}
+		}
+	}(time.Second)
+
+	// Wait for connection, cancel, or some other unknown issue
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case evt := <-c.ch:
+		if evt.Type == MOSQ_FLAG_EVENT_CONNECT && evt.Err == nil {
+			return c, nil
+		} else if evt.Err != nil {
+			return nil, evt.Err
+		} else {
+			return nil, ErrOutOfOrder.With(evt.Type)
+		}
+	}
 }
 
-func (c *Client) Close() error {
+func (c *Client) Close(ctx context.Context) error {
 	var result error
 
-	// Disconnect client
+	// Perform disconnect
 	if err := c.client.Disconnect(); err != nil {
 		result = multierror.Append(result, err)
 	}
 
-	// Stop loop
-	if err := c.client.LoopStop(false); err != nil {
-		result = multierror.Append(result, err)
+	// Wait for disconnection, cancel, or some other unknown issue
+	select {
+	case <-ctx.Done():
+		break
+	case evt := <-c.ch:
+		if evt.Type == MOSQ_FLAG_EVENT_DISCONNECT && evt.Err == nil {
+			break
+		} else if evt.Err != nil {
+			result = multierror.Append(result, evt.Err)
+		} else {
+			result = multierror.Append(result, ErrOutOfOrder.With(evt.Type))
+		}
 	}
+
+	// Wait for loop to be completed
+	c.WaitGroup.Wait()
 
 	// Destroy client
 	if err := c.client.Destroy(); err != nil {
 		result = multierror.Append(result, err)
 	}
 
-	// Cleanup
-	if err := mosq.Cleanup(); err != nil {
-		result = multierror.Append(result, err)
-	}
-
 	// Return any errors
 	return result
 }
-
-/*
-func (c *Client) Connect(host string, port uint, opts ...Opt) error {
-	// Process options
-	flags := MOSQ_FLAG_EVENT_ALL
-	keepalive_secs := int(60)
-	for _, opt := range opts {
-		switch opt.Type {
-		case MOSQ_OPTION_FLAGS:
-			flags = opt.Flags
-		case MOSQ_OPTION_KEEPALIVE:
-			keepalive_secs = opt.Int
-		default:
-			return ErrBadParameter.With(opt.Type)
-		}
-	}
-
-	// Set flags
-	if flags&MOSQ_FLAG_EVENT_CONNECT == MOSQ_FLAG_EVENT_CONNECT {
-		this.client.SetConnectCallback(func(userInfo uintptr, rc int) {
-			this.bus.Emit(NewConnect(this, rc))
-		})
-	} else {
-		this.client.SetConnectCallback(nil)
-	}
-	if flags&MOSQ_FLAG_EVENT_DISCONNECT == MOSQ_FLAG_EVENT_DISCONNECT {
-		this.client.SetDisconnectCallback(func(userInfo uintptr, rc int) {
-			this.bus.Emit(NewDisconnect(this, rc))
-		})
-	} else {
-		this.client.SetDisconnectCallback(nil)
-	}
-	if flags&MOSQ_FLAG_EVENT_SUBSCRIBE == MOSQ_FLAG_EVENT_SUBSCRIBE {
-		this.client.SetSubscribeCallback(func(userInfo uintptr, id int, qos []int) {
-			this.bus.Emit(NewSubscribe(this, id))
-		})
-	} else {
-		this.client.SetSubscribeCallback(nil)
-	}
-	if flags&MOSQ_FLAG_EVENT_UNSUBSCRIBE == MOSQ_FLAG_EVENT_UNSUBSCRIBE {
-		this.client.SetUnsubscribeCallback(func(userInfo uintptr, id int) {
-			this.bus.Emit(NewUnsubscribe(this, id))
-		})
-	} else {
-		this.client.SetUnsubscribeCallback(nil)
-	}
-	if flags&MOSQ_FLAG_EVENT_PUBLISH == MOSQ_FLAG_EVENT_PUBLISH {
-		this.client.SetPublishCallback(func(userInfo uintptr, id int) {
-			this.bus.Emit(NewPublish(this, id))
-		})
-	} else {
-		this.client.SetPublishCallback(nil)
-	}
-	if flags&MOSQ_FLAG_EVENT_MESSAGE == MOSQ_FLAG_EVENT_MESSAGE {
-		this.client.SetMessageCallback(func(userInfo uintptr, message *mosq.Message) {
-			// We make a copy of the data
-			// as this is invalidated after the callback ends
-			data := make([]byte, len(message.Data()))
-			copy(data, message.Data())
-			// Emit
-			this.bus.Emit(NewMessage(this, message.Id(), message.Topic(), data))
-		})
-	} else {
-		this.client.SetMessageCallback(nil)
-	}
-	if this.Log.IsDebug() || flags&MOSQ_FLAG_EVENT_LOG == MOSQ_FLAG_EVENT_LOG {
-		this.client.SetLogCallback(func(userInfo uintptr, level mosq.Level, str string) {
-			if level&mosq.MOSQ_LOG_DEBUG > 0 {
-				this.Log.Debug(level, str)
-			} else if level&mosq.MOSQ_LOG_ERR > 0 {
-				this.Log.Error(fmt.Errorf("%v %v", level, str))
-			} else {
-				this.Log.Info(level, str)
-			}
-		})
-	} else {
-		this.client.SetLogCallback(nil)
-	}
-
-	// Return success
-	return nil
-}
-*/
 
 ////////////////////////////////////////////////////////////////////////////////
 // STRINGIFY
@@ -284,26 +233,9 @@ func (c *Client) String() string {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// SUBSCRIBE, UNSUBSCRIBE AND PUBLISH
-/*
-func (c *Client) Subscribe(topics string, opts ...Opt) (int, error) {
-	// Check for connection
-	if c.connected == false {
-		return 0, ErrOutOfOrder.With("Subscribe")
-	}
+// PUBLIC METHODS
 
-	// Process options
-	qos := int(1)
-	for _, opt := range opts {
-		switch opt.Type {
-		case MOSQ_OPTION_QOS:
-			qos = opt.Int
-		default:
-			return 0, ErrBadParameter.With(opt.Type)
-		}
-
-	}
-
+func (c *Client) Subscribe(topics string, qos int) (int, error) {
 	// Perform the subscribe
 	if id, err := c.client.Subscribe(topics, qos); err != nil {
 		return 0, err
@@ -313,15 +245,14 @@ func (c *Client) Subscribe(topics string, opts ...Opt) (int, error) {
 }
 
 func (c *Client) Unsubscribe(topics string) (int, error) {
-	if c.connected == false {
-		return 0, ErrOutOfOrder.With("Unsubscribe")
-	} else if id, err := c.client.Unsubscribe(topics); err != nil {
+	if id, err := c.client.Unsubscribe(topics); err != nil {
 		return 0, err
 	} else {
 		return id, nil
 	}
 }
 
+/*
 func (c *Client) Publish(topic string, data []byte, opts ...Opt) (int, error) {
 	// Check for connection
 	if c.connected == false {
@@ -406,3 +337,14 @@ func (this *Client) PublishInflux(topic string, measurement string, fields map[s
 	return this.Publish(topic, []byte(str+ts), other...)
 }
 */
+
+////////////////////////////////////////////////////////////////////////////////
+// PRIVATE METHODS
+
+func toError(err mosq.Error) error {
+	if err == mosq.MOSQ_ERR_SUCCESS {
+		return nil
+	} else {
+		return err
+	}
+}

@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"io"
 	"runtime"
+
+	// Packages
+	mosq "github.com/djthorpe/go-mosquitto/sys/mosquitto"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -28,4 +31,10 @@ func PrintVersion(w io.Writer) {
 		fmt.Fprintf(w, "  Build Time: %v\n", GoBuildTime)
 	}
 	fmt.Fprintf(w, "  Go: %v (%v/%v)\n", runtime.Version(), runtime.GOOS, runtime.GOARCH)
+	fmt.Fprintf(w, "  libmosquitto: %v\n", LibVersion())
+}
+
+func LibVersion() string {
+	major, minor, revision := mosq.Version()
+	return fmt.Sprintf("%d.%d.%d", major, minor, revision)
 }
