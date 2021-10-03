@@ -18,11 +18,10 @@ github.com/hashicorp/go-multierror v1.1.1 h1:H5DkEtf6CXdFp0N0Em5UCwQpXMWke8IA0+l
 github.com/hashicorp/go-multierror v1.1.1/go.mod h1:iw975J/qwKPdAO1clOe2L8331t/9/fmwbPZ6JB6eMoM=
 github.com/miekg/dns v1.1.43/go.mod h1:+evo5L0630/F6ca/Z9+GAqzhjGyn8/c+TBaOyfEl0V4=
 github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826/go.mod h1:TaXosZuwdSHYgviHp1DAtfrULt5eUgsSMsZf+YrPgl8=
-github.com/mutablelogic/go-server v1.0.33/go.mod h1:g6V1jzdzvCwpwUIOsz8CKQqQD7owbCH6LHOHsMT+UDQ=
-github.com/mutablelogic/go-server v1.0.34 h1:wySf4lI2svd1NNh9EMp/04kaLFuKlvDn5+KPGgMRccw=
-github.com/mutablelogic/go-server v1.0.34/go.mod h1:g6V1jzdzvCwpwUIOsz8CKQqQD7owbCH6LHOHsMT+UDQ=
-github.com/mutablelogic/go-sqlite v1.0.44 h1:n+jDqsGsFIDy3z+cpzeSs9xSVBNdzCltzNTvQkF3584=
-github.com/mutablelogic/go-sqlite v1.0.44/go.mod h1:s+kxl3daMeYw536BKnxDLxUzMR55aCCc8YAfjASvvr0=
+github.com/mutablelogic/go-server v1.0.35 h1:FX48EXUIwo32LfrD/C0Zm1dYB6wqhDGJCktWGU3384o=
+github.com/mutablelogic/go-server v1.0.35/go.mod h1:g6V1jzdzvCwpwUIOsz8CKQqQD7owbCH6LHOHsMT+UDQ=
+github.com/mutablelogic/go-sqlite v1.0.45 h1:K/CeXyDfk3sO4pAUCp6VE+UzY1sgcs+td9ROhxr8D/M=
+github.com/mutablelogic/go-sqlite v1.0.45/go.mod h1:5zyCalHGe/Ga62to1xLjaEdk+vOxlsX66nGUIZYzuKw=
 github.com/pkg/term v1.1.0/go.mod h1:E25nymQcrSllhX42Ok8MRm1+hyBdHY0dCeiKZ9jpNGw=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/richardlehane/mscfb v1.0.3/go.mod h1:YzVpcZg9czvAuhk9T+a3avCpcFPMUWm7gK3DypaEsUk=

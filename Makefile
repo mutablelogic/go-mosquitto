@@ -37,7 +37,6 @@ plugins: $(PLUGIN_DIR)
 	@echo Build sqlite3
 	@${GO} build -buildmode=plugin -o ${BUILD_DIR}/sqlite3.plugin ${BUILD_FLAGS} github.com/mutablelogic/go-sqlite/plugin/sqlite3
 
-
 $(CMD_DIR): FORCE
 	@echo Build cmd $(notdir $@)
 	@${GO} build -o ${BUILD_DIR}/$(notdir $@) ${BUILD_FLAGS} ./$@
