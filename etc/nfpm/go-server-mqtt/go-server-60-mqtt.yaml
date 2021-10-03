@@ -3,11 +3,9 @@
 # a REST API. In order to build, run 'make server' and the server
 # binary and required plugins are stored in the 'build' directory.
 plugins:
-  - build/httpserver.plugin
-  - build/env.plugin
-  - build/sqlite3.plugin
-  - build/mqtt.plugin
-  - build/log.plugin
+  - plugin/sqlite3.plugin
+  - plugin/log.plugin
+  - plugin/mqtt.plugin
 
 handlers:
   mqtt:
@@ -45,8 +43,3 @@ mqtt:
   database: main
   # minimum retention for messages (minimum 1m) 168h is one week
   retention: 168h
-
-sqlite3:
-  create: true
-  databases:
-    main: /tmp/mqtt.sqlite

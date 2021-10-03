@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	// Packages
@@ -12,6 +13,7 @@ import (
 	. "github.com/djthorpe/go-errors"
 	. "github.com/djthorpe/go-mosquitto"
 	. "github.com/mutablelogic/go-server"
+	. "github.com/mutablelogic/go-sqlite"
 
 	// Hack some dependencies
 	_ "github.com/djthorpe/go-marshaler"
@@ -32,12 +34,22 @@ type Config struct {
 	CertFile  string        `yaml:"cert"`      // TLS Certificate (required if CertAuth is set)
 	KeyFile   string        `yaml:"key"`       // TLS Key (required if CertAuth is set)
 	Insecure  bool          `yaml:"insecure"`  // Don't verify broker certificates (optional)
-	Topics    []string      `yaml:"topics"`    // Topics to subscribe to
+	Topics    []string      `yaml:"topics"`    // Topics to subscribe to (optional)
+	Database  string        `yaml:"database"`  // Database name for storage of messages
+	Retain    time.Duration `yaml:"retention"` // Retain time for messages (optional)
 }
 
 type plugin struct {
-	cfg    Config
-	client *mosquitto.Client
+	pool
+	cfg       Config
+	client    *mosquitto.Client
+	ch        chan *mosquitto.Event
+	connected time.Time
+}
+
+type pool interface {
+	Get() SQConnection
+	Put(conn SQConnection)
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -46,6 +58,8 @@ type plugin struct {
 const (
 	defaultConnectTimeout = 30 * time.Second
 	defaultKeepAlive      = 60 * time.Second
+	defaultRetain         = 7 * 24 * time.Hour
+	defaultCapacity       = 10000
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -61,11 +75,33 @@ func New(ctx context.Context, provider Provider) Plugin {
 		provider.Print(ctx, err)
 		return nil
 	} else if cfg.Broker == "" {
-		provider.Print(ctx, "Missing required 'broker'")
+		provider.Print(ctx, "Missing required 'broker' configuration")
 		return nil
 	} else {
 		p.cfg = cfg
 	}
+
+	// Get sqlite database
+	if pool, ok := provider.GetPlugin(ctx, "sqlite3").(pool); !ok {
+		provider.Print(ctx, "Missing required 'sqlite3' plugin")
+		return nil
+	} else if p.cfg.Database == "" {
+		provider.Print(ctx, "Missing required 'database' configuration")
+		return nil
+	} else if err := HasSchema(pool, p.cfg.Database); err != nil {
+		provider.Print(ctx, err)
+		return nil
+	} else {
+		p.pool = pool
+	}
+
+	// Set message retain (with minimum of one minute)
+	if p.cfg.Retain < time.Minute {
+		p.cfg.Retain = defaultRetain
+	}
+
+	// Create a channel to receive events
+	p.ch = make(chan *mosquitto.Event, defaultCapacity)
 
 	// Return success
 	return p
@@ -76,8 +112,16 @@ func New(ctx context.Context, provider Provider) Plugin {
 
 func (p *plugin) String() string {
 	str := "<mqtt"
+	if p.connected.IsZero() {
+		str += " disconnected"
+	} else {
+		str += fmt.Sprint(" connected=", time.Since(p.connected))
+	}
 	if p.client != nil {
-		str += " " + p.client.String()
+		str += fmt.Sprint(" ", p.client)
+	}
+	if p.pool != nil {
+		str += fmt.Sprint(" ", p.pool)
 	}
 	return str + ">"
 }
@@ -92,9 +136,23 @@ func Name() string {
 func (p *plugin) Run(ctx context.Context, provider Provider) error {
 	var result error
 
-	// Set up a ticker to check for connection
+	// Set up a ticker to check for connection and topic subscription
 	timer := time.NewTimer(5 * time.Second)
 	defer timer.Stop()
+
+	// Set up a ticker to delete older messages beyond the retain time
+	retain := time.NewTimer(5 * time.Second)
+	defer retain.Stop()
+
+	// Set up schema
+	if err := p.AddSchema(ctx); err != nil {
+		return err
+	}
+
+	// Add REST API handlers
+	if err := p.AddHandlers(ctx, provider); err != nil {
+		return err
+	}
 
 FOR_LOOP:
 	for {
@@ -109,10 +167,28 @@ FOR_LOOP:
 					provider.Printf(ctx, "Connection error: %v", err)
 				} else {
 					p.client = client
+					p.connected = time.Now()
 				}
 			}
 			// Reset the timer
 			timer.Reset(defaultConnectTimeout)
+		case <-retain.C:
+			if n, err := p.RetainCycle(ctx); err != nil {
+				provider.Printf(ctx, "Retain cycle error: %v", err)
+			} else if n > 0 {
+				provider.Printf(ctx, "Retain cycle deleted %d oldest messages", n)
+			}
+			// Reset the timer
+			retain.Reset(p.cfg.Retain / 4)
+		case evt := <-p.ch:
+			// Handle message
+			if evt.Type == MOSQ_FLAG_EVENT_MESSAGE {
+				if err := p.AddMessage(ctx, evt); err != nil {
+					provider.Printf(ctx, "Message error: %v", err)
+				}
+			} else {
+				provider.Printf(ctx, "Event: %v", evt)
+			}
 		}
 	}
 
@@ -122,6 +198,9 @@ FOR_LOOP:
 			result = multierror.Append(result, err)
 		}
 	}
+
+	// Close the event channel
+	close(p.ch)
 
 	// Return any errors
 	return result
@@ -179,9 +258,9 @@ func (p *plugin) connect(ctx context.Context, provider Provider) (*mosquitto.Cli
 }
 
 func (p *plugin) callback(ctx context.Context, provider Provider, evt *mosquitto.Event) {
-	provider.Print(ctx, evt)
 	switch evt.Type {
 	case MOSQ_FLAG_EVENT_CONNECT:
+		provider.Print(ctx, evt)
 		if evt.Err != nil {
 			provider.Printf(ctx, "Connection error: %v", evt.Err)
 			return
@@ -193,14 +272,19 @@ func (p *plugin) callback(ctx context.Context, provider Provider, evt *mosquitto
 			}
 		}
 	case MOSQ_FLAG_EVENT_DISCONNECT:
+		provider.Print(ctx, evt)
 		p.client = nil
+		p.connected = time.Time{}
 		if evt.Err != nil {
 			provider.Printf(ctx, "Disconnection error: %v", evt.Err)
 			return
 		}
-	case MOSQ_FLAG_EVENT_MESSAGE:
-		provider.Printf(ctx, "Message: %q => %v", evt.Topic, string(evt.Data))
 	default:
-		provider.Print(ctx, evt)
+		select {
+		case p.ch <- evt:
+			break
+		default:
+			provider.Printf(ctx, "Message dropped in topic %q, too many messages", evt.Topic)
+		}
 	}
 }
