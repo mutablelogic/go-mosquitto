@@ -1,4 +1,4 @@
-module github.com/djthorpe/go-mosquitto
+module github.com/mutablelogic/go-mosquitto
 
 go 1.13
 

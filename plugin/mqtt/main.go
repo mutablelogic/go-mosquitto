@@ -6,12 +6,12 @@ import (
 	"time"
 
 	// Packages
-	"github.com/djthorpe/go-mosquitto/pkg/mosquitto"
+	"github.com/mutablelogic/go-mosquitto/pkg/mosquitto"
 	"github.com/hashicorp/go-multierror"
 
 	// Namespace imports
 	. "github.com/djthorpe/go-errors"
-	. "github.com/djthorpe/go-mosquitto"
+	. "github.com/mutablelogic/go-mosquitto"
 	. "github.com/mutablelogic/go-server"
 	. "github.com/mutablelogic/go-sqlite"
 

@@ -6,7 +6,7 @@ import (
 	"runtime"
 
 	// Packages
-	mosq "github.com/djthorpe/go-mosquitto/sys/mosquitto"
+	mosq "github.com/mutablelogic/go-mosquitto/sys/mosquitto"
 )
 
 ///////////////////////////////////////////////////////////////////////////////

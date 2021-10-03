@@ -11,7 +11,7 @@ import (
 	"unicode/utf8"
 
 	// Package imports
-	"github.com/djthorpe/go-mosquitto/pkg/mosquitto"
+	"github.com/mutablelogic/go-mosquitto/pkg/mosquitto"
 
 	// Namespace imports
 	. "github.com/djthorpe/go-errors"

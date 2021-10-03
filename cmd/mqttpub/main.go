@@ -13,8 +13,8 @@ import (
 	"time"
 
 	// Packages
-	"github.com/djthorpe/go-mosquitto/pkg/app"
-	"github.com/djthorpe/go-mosquitto/pkg/config"
+	"github.com/mutablelogic/go-mosquitto/pkg/app"
+	"github.com/mutablelogic/go-mosquitto/pkg/config"
 )
 
 ////////////////////////////////////////////////////////////////////////////////

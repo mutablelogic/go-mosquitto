@@ -7,7 +7,7 @@ maintainer: "David Thorpe <djt@mutablelogic.com>"
 description: |
   Plugggable go-server monolith: mqtt
 vendor: "mutablelogic.com"
-homepage: "https://github.com/djthorpe/go-mosquitto"
+homepage: "https://github.com/mutablelogic/go-mosquitto"
 depends:
   - go-server-httpserver
   - go-server-sqlite3

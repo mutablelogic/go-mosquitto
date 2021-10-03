@@ -9,12 +9,12 @@ import (
 	"time"
 
 	// Packages
-	mosq "github.com/djthorpe/go-mosquitto/sys/mosquitto"
+	mosq "github.com/mutablelogic/go-mosquitto/sys/mosquitto"
 	multierror "github.com/hashicorp/go-multierror"
 
 	// Namespace imports
 	. "github.com/djthorpe/go-errors"
-	. "github.com/djthorpe/go-mosquitto"
+	. "github.com/mutablelogic/go-mosquitto"
 )
 
 ////////////////////////////////////////////////////////////////////////////////

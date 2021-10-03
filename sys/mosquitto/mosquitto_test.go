@@ -6,8 +6,8 @@ import (
 	"time"
 
 	// Namespace imports
-	"github.com/djthorpe/go-mosquitto/sys/mosquitto"
-	. "github.com/djthorpe/go-mosquitto/sys/mosquitto"
+
+	. "github.com/mutablelogic/go-mosquitto/sys/mosquitto"
 )
 
 const (
@@ -58,12 +58,12 @@ func Test_Mosquitto_003(t *testing.T) {
 }
 
 func Test_Mosquitto_004(t *testing.T) {
-	if err := mosquitto.Init(); err != nil {
+	if err := Init(); err != nil {
 		t.Fatal(err)
 	}
-	defer mosquitto.Cleanup()
+	defer Cleanup()
 
-	client, err := mosquitto.NewEx("id", true)
+	client, err := NewEx("id", true)
 	if err != nil {
 		t.Error(err)
 	}
@@ -117,12 +117,12 @@ func Test_Mosquitto_005(t *testing.T) {
 }
 
 func Test_Mosquitto_006(t *testing.T) {
-	if err := mosquitto.Init(); err != nil {
+	if err := Init(); err != nil {
 		t.Fatal(err)
 	}
-	defer mosquitto.Cleanup()
+	defer Cleanup()
 
-	client, err := mosquitto.NewEx("id", true)
+	client, err := NewEx("id", true)
 	if err != nil {
 		t.Error(err)
 	}
@@ -170,12 +170,12 @@ func Test_Mosquitto_006(t *testing.T) {
 }
 
 func Test_Mosquitto_007(t *testing.T) {
-	if err := mosquitto.Init(); err != nil {
+	if err := Init(); err != nil {
 		t.Fatal(err)
 	}
-	defer mosquitto.Cleanup()
+	defer Cleanup()
 
-	client, err := mosquitto.NewEx("id", true)
+	client, err := NewEx("id", true)
 	if err != nil {
 		t.Error(err)
 	}

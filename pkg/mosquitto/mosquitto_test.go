@@ -6,7 +6,7 @@ import (
 	"time"
 
 	// Namespace imports
-	. "github.com/djthorpe/go-mosquitto/pkg/mosquitto"
+	. "github.com/mutablelogic/go-mosquitto/pkg/mosquitto"
 )
 
 const (

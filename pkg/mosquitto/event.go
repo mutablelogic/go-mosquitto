@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	// Namespace imports
-	. "github.com/djthorpe/go-mosquitto"
+	. "github.com/mutablelogic/go-mosquitto"
 )
 
 ////////////////////////////////////////////////////////////////////////////////
