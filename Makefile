@@ -1,6 +1,5 @@
 # Paths to packages
 GO=$(shell which go)
-SED=$(shell which sed)
 
 # Paths to locations, etc
 BUILD_DIR := "build"
@@ -46,22 +45,6 @@ $(PLUGIN_DIR): FORCE
 	@${GO} build -buildmode=plugin -o ${BUILD_DIR}/$(notdir $@).plugin ${BUILD_FLAGS} ./$@
 
 FORCE:
-
-deb: nfpm go-server-mqtt-deb
-
-go-server-mqtt-deb: plugin/mqtt
-	@echo Package go-server-mqtt deb
-	@${SED} \
-		-e 's/^version:.*$$/version: $(BUILD_VERSION)/'  \
-		-e 's/^arch:.*$$/arch: $(BUILD_ARCH)/' \
-		-e 's/^platform:.*$$/platform: $(BUILD_PLATFORM)/' \
-		etc/nfpm/go-server-mqtt/nfpm.yaml > $(BUILD_DIR)/go-server-mqtt-nfpm.yaml
-	@nfpm pkg -f $(BUILD_DIR)/go-server-mqtt-nfpm.yaml --packager deb --target $(BUILD_DIR)
-
-nfpm:
-	@echo Installing nfpm
-	@${GO} mod tidy
-	@${GO} install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.3.1
 
 test:
 	@echo Test sys/mosquitto
