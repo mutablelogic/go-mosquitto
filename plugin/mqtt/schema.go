@@ -33,6 +33,7 @@ const (
 )
 
 const (
+	MessageTypeEmpty   = "null"
 	MessageTypeText    = "text"
 	MessageTypeJSON    = "json"
 	MessageTypeXML     = "xml"
@@ -171,6 +172,10 @@ func (p *plugin) RetainCycle(ctx context.Context) (int, error) {
 // PRIVATE  METHODS
 
 func toType(data []byte) MessageType {
+	// Check for empty
+	if len(data) == 0 {
+		return MessageTypeEmpty
+	}
 	// Check for number
 	if isNumber(data) {
 		return MessageTypeNumeric

@@ -6,8 +6,8 @@ import (
 	"time"
 
 	// Packages
-	"github.com/mutablelogic/go-mosquitto/pkg/mosquitto"
 	"github.com/hashicorp/go-multierror"
+	"github.com/mutablelogic/go-mosquitto/pkg/mosquitto"
 
 	// Namespace imports
 	. "github.com/djthorpe/go-errors"
@@ -45,6 +45,7 @@ type plugin struct {
 	client    *mosquitto.Client
 	ch        chan *mosquitto.Event
 	connected time.Time
+	topics    *topics
 }
 
 type pool interface {
@@ -102,6 +103,9 @@ func New(ctx context.Context, provider Provider) Plugin {
 
 	// Create a channel to receive events
 	p.ch = make(chan *mosquitto.Event, defaultCapacity)
+
+	// Create a topics object to track subscriptions
+	p.topics = NewTopics()
 
 	// Return success
 	return p
@@ -169,6 +173,10 @@ FOR_LOOP:
 					p.client = client
 					p.connected = time.Now()
 				}
+			} else {
+				if err := p.subscribeToTopics(); err != nil {
+					provider.Printf(ctx, "Subscribe error: %v", err)
+				}
 			}
 			// Reset the timer
 			timer.Reset(defaultConnectTimeout)
@@ -186,6 +194,8 @@ FOR_LOOP:
 				if err := p.AddMessage(ctx, evt); err != nil {
 					provider.Printf(ctx, "Message error: %v", err)
 				}
+			} else if evt.Type == MOSQ_FLAG_EVENT_SUBSCRIBE || evt.Type == MOSQ_FLAG_EVENT_UNSUBSCRIBE {
+				p.topics.Event(evt.Type, evt.Id)
 			} else {
 				provider.Printf(ctx, "Event: %v", evt)
 			}
@@ -209,12 +219,31 @@ FOR_LOOP:
 ///////////////////////////////////////////////////////////////////////////////
 // PUBLIC METHODS
 
+// Subscribe to a topic
 func (p *plugin) Subscribe(topic string) error {
 	if p.client == nil {
 		return ErrOutOfOrder.With("Client not connected")
 	}
-	if _, err := p.client.Subscribe(topic); err != nil {
+	if req, err := p.client.Subscribe(topic); err != nil {
 		return err
+	} else {
+		p.topics.Subscribe(topic, req)
+	}
+
+	// Return success
+	return nil
+}
+
+// Unsubscribe from a topic
+func (p *plugin) Unubscribe(topic string) error {
+	if p.client == nil {
+		return ErrOutOfOrder.With("Client not connected")
+	}
+	if req, err := p.client.Unsubscribe(topic); err != nil {
+		return err
+	} else {
+		// TODO: Remove topic from p.cfg.Topics
+		p.topics.Unsubscribe(topic, req)
 	}
 
 	// Return success
@@ -266,10 +295,8 @@ func (p *plugin) callback(ctx context.Context, provider Provider, evt *mosquitto
 			return
 		}
 		// Subscribe to topics
-		for _, topic := range p.cfg.Topics {
-			if err := p.Subscribe(topic); err != nil {
-				provider.Printf(ctx, "Subscribe error: %q: %v", topic, err)
-			}
+		if err := p.subscribeToTopics(); err != nil {
+			provider.Printf(ctx, "Subscribe error: %v", err)
 		}
 	case MOSQ_FLAG_EVENT_DISCONNECT:
 		provider.Print(ctx, evt)
@@ -287,4 +314,16 @@ func (p *plugin) callback(ctx context.Context, provider Provider, evt *mosquitto
 			provider.Printf(ctx, "Message dropped in topic %q, too many messages", evt.Topic)
 		}
 	}
+}
+
+func (p *plugin) subscribeToTopics() error {
+	for _, topic := range p.cfg.Topics {
+		if !p.topics.Has(topic) {
+			if err := p.Subscribe(topic); err != nil {
+				return err
+			}
+		}
+	}
+	// Return success
+	return nil
 }

@@ -18,12 +18,13 @@ import (
 // TYPES
 
 type PingResponse struct {
-	Version   string `json:"version"`
-	Broker    string `json:"broker"`
-	Database  string `json:"database"`
-	Retain    string `json:"retain"`
-	Connected string `json:"connected"`
-	Count     int64  `json:"count"`
+	Version   string   `json:"version"`
+	Broker    string   `json:"broker"`
+	Database  string   `json:"database"`
+	Retain    string   `json:"retain"`
+	Connected string   `json:"connected,omitempty"`
+	Count     int64    `json:"count,omitempty"`
+	Topics    []string `json:"topics,omitempty"`
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -57,21 +58,25 @@ func (p *plugin) AddHandlers(ctx context.Context, provider Provider) error {
 // HANDLERS
 
 func (p *plugin) ServePing(w http.ResponseWriter, req *http.Request) {
-	// Count messages in the database
-	count, err := p.Count(req.Context())
-	if err != nil {
-		router.ServeError(w, http.StatusBadGateway, err.Error())
-		return
-	}
-
 	// Populate response
 	response := PingResponse{
 		Version:  p.client.Version(),
 		Broker:   p.cfg.Broker,
 		Database: p.cfg.Database,
 		Retain:   fmt.Sprint(p.cfg.Retain),
-		Count:    count,
+		Topics:   p.topics.Topics(),
 	}
+
+	// Count messages in the database
+	count, err := p.Count(req.Context())
+	if err != nil {
+		router.ServeError(w, http.StatusBadGateway, err.Error())
+		return
+	} else if count >= 0 {
+		response.Count = count
+	}
+
+	// Set connected status
 	if !p.connected.IsZero() {
 		response.Connected = fmt.Sprint(time.Since(p.connected).Truncate(time.Second))
 	}
