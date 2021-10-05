@@ -89,7 +89,7 @@ func (p *plugin) AddSchema(ctx context.Context) error {
 			C("id").WithAutoIncrement().WithType("INTEGER"),
 			C("ts").NotNull(),
 			C("topic").NotNull(),
-			C("type"),
+			C("type").NotNull(),
 			C("payload").WithType("BLOB"),
 		).IfNotExists()); err != nil {
 			return err
@@ -97,6 +97,18 @@ func (p *plugin) AddSchema(ctx context.Context) error {
 		// Create the index on topic
 		if _, err := txn.Query(N(messageIndexName).WithSchema(p.cfg.Database).CreateIndex(
 			messageTableName, "topic",
+		).IfNotExists()); err != nil {
+			return err
+		}
+		// Create the index on type
+		if _, err := txn.Query(N(messageIndexName).WithSchema(p.cfg.Database).CreateIndex(
+			messageTableName, "type",
+		).IfNotExists()); err != nil {
+			return err
+		}
+		// Create the index on timestamp
+		if _, err := txn.Query(N(messageIndexName).WithSchema(p.cfg.Database).CreateIndex(
+			messageTableName, "ts",
 		).IfNotExists()); err != nil {
 			return err
 		}
