@@ -48,5 +48,6 @@ mqtt:
 
 sqlite3:
   create: true
+  trace: false
   databases:
     main: /tmp/mqtt.sqlite

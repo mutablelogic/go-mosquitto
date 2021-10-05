@@ -189,15 +189,16 @@ FOR_LOOP:
 			// Reset the timer
 			retain.Reset(p.cfg.Retain / 4)
 		case evt := <-p.ch:
-			// Handle message
+			// Handle message, subscription and unsubscription
 			if evt.Type == MOSQ_FLAG_EVENT_MESSAGE {
 				if err := p.AddMessage(ctx, evt); err != nil {
 					provider.Printf(ctx, "Message error: %v", err)
 				}
-			} else if evt.Type == MOSQ_FLAG_EVENT_SUBSCRIBE || evt.Type == MOSQ_FLAG_EVENT_UNSUBSCRIBE {
+				break
+			}
+			provider.Printf(ctx, "Event: %v", evt)
+			if evt.Type == MOSQ_FLAG_EVENT_SUBSCRIBE || evt.Type == MOSQ_FLAG_EVENT_UNSUBSCRIBE {
 				p.topics.Event(evt.Type, evt.Id)
-			} else {
-				provider.Printf(ctx, "Event: %v", evt)
 			}
 		}
 	}

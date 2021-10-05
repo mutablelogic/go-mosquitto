@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"io"
+	"reflect"
 	"strconv"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -40,6 +42,14 @@ const (
 	MessageTypeBinary  = "byte"
 	MessageTypeNumeric = "number"
 	MessageTypeBoolean = "boolean"
+)
+
+var (
+	// cast for first two elements of message
+	messageRowCast = []reflect.Type{
+		reflect.TypeOf(uint(0)),     // id
+		reflect.TypeOf(time.Time{}), // ts
+	}
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -165,6 +175,88 @@ func (p *plugin) RetainCycle(ctx context.Context) (int, error) {
 		return 0, err
 	} else {
 		return n, nil
+	}
+}
+
+// Query for messages by type and order results
+func (p *plugin) Query(ctx context.Context, t string, order string, limit uint) (SQResults, error) {
+	var results SQResults
+
+	// Get a connection
+	conn := p.Get()
+	if conn == nil {
+		return nil, ErrInternalAppError.With("Missing database connection")
+	}
+	defer p.Put(conn)
+
+	// Perform the transaction
+	if err := conn.Do(ctx, 0, func(txn SQTransaction) error {
+		var err error
+		var params []interface{}
+		// Create the select statement
+		s := S(N(messageTableName).WithSchema(p.cfg.Database)).
+			To(N("id"), N("ts"), N("topic"), N("type"), N("payload"))
+		// Append parameters
+		if limit > 0 {
+			s = s.WithLimitOffset(limit, 0)
+		}
+		if t != "" {
+			s = s.Where(Q("type = ?"))
+			params = append(params, t)
+		}
+		for _, order := range strings.FieldsFunc(order, func(c rune) bool {
+			return c == ',' || c == ' '
+		}) {
+			var desc bool
+			order = strings.TrimSpace(order)
+			if strings.HasPrefix(order, "-") {
+				desc = true
+			}
+			order = strings.TrimLeftFunc(order, func(c rune) bool {
+				return c == '-' || c == '+'
+			})
+			if desc {
+				s = s.Order(N(order).WithDesc())
+			} else {
+				s = s.Order(N(order))
+			}
+		}
+		// Run the query and return any errors
+		results, err = txn.Query(s, params...)
+		return err
+	}); err != nil {
+		return nil, err
+	} else {
+		return results, nil
+	}
+}
+
+// Get message by id for messages by type and order results
+func (p *plugin) GetMessage(ctx context.Context, id int64) (SQResults, error) {
+	var results SQResults
+
+	// Get a connection
+	conn := p.Get()
+	if conn == nil {
+		return nil, ErrInternalAppError.With("Missing database connection")
+	}
+	defer p.Put(conn)
+
+	// Perform the transaction
+	if err := conn.Do(ctx, 0, func(txn SQTransaction) error {
+		var err error
+
+		// Create the select statement
+		s := S(N(messageTableName).WithSchema(p.cfg.Database)).
+			To(N("id"), N("ts"), N("topic"), N("type"), N("payload")).
+			Where(Q("id = ?"))
+		// Run query and return results
+		results, err = txn.Query(s, id)
+		return err
+	}); err != nil {
+		return nil, err
+	} else {
+		return results, nil
 	}
 }
 
