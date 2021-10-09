@@ -14,10 +14,6 @@ import (
 	. "github.com/mutablelogic/go-mosquitto"
 	. "github.com/mutablelogic/go-server"
 	. "github.com/mutablelogic/go-sqlite"
-
-	// Hack some dependencies
-	_ "github.com/djthorpe/go-marshaler"
-	_ "gopkg.in/yaml.v3"
 )
 
 ///////////////////////////////////////////////////////////////////////////////

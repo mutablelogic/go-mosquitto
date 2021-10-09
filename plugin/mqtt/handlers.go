@@ -4,9 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -221,8 +219,8 @@ func makeResponse(r SQResults, cap int) []MessageResponse {
 	// The results are id, ts, topic, type and payload
 	result := make([]MessageResponse, 0, cap)
 	for {
-		row, err := r.Next(messageRowCast...)
-		if errors.Is(err, io.EOF) {
+		row := r.Next(messageRowCast...)
+		if row == nil {
 			break
 		}
 		message := MessageResponse{

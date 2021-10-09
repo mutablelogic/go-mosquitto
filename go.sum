@@ -21,8 +21,8 @@ github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826/go.mod h1:TaXosZuwd
 github.com/mutablelogic/go-server v1.0.35/go.mod h1:g6V1jzdzvCwpwUIOsz8CKQqQD7owbCH6LHOHsMT+UDQ=
 github.com/mutablelogic/go-server v1.0.36 h1:56eeECXyPBnfbZxJjqC4J0Dgq8WeN7yYQmO7TFsVpMw=
 github.com/mutablelogic/go-server v1.0.36/go.mod h1:g6V1jzdzvCwpwUIOsz8CKQqQD7owbCH6LHOHsMT+UDQ=
-github.com/mutablelogic/go-sqlite v1.0.48 h1:AtvajJ+9EFaqDWUBkyYG27Jcak/DDGXn3lnKl9LKniw=
-github.com/mutablelogic/go-sqlite v1.0.48/go.mod h1:5zyCalHGe/Ga62to1xLjaEdk+vOxlsX66nGUIZYzuKw=
+github.com/mutablelogic/go-sqlite v1.0.50 h1:PxM0D3jOVQZR9Eft8OwOUMrXHDdxgMgg1XsSKuH+4ig=
+github.com/mutablelogic/go-sqlite v1.0.50/go.mod h1:5zyCalHGe/Ga62to1xLjaEdk+vOxlsX66nGUIZYzuKw=
 github.com/pkg/term v1.1.0/go.mod h1:E25nymQcrSllhX42Ok8MRm1+hyBdHY0dCeiKZ9jpNGw=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/richardlehane/mscfb v1.0.3/go.mod h1:YzVpcZg9czvAuhk9T+a3avCpcFPMUWm7gK3DypaEsUk=
